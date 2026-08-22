@@ -13,6 +13,7 @@ import { UserPersona, LanguageCode } from '@/lib/types';
 import { getDynamicStandards } from '@/lib/data/bisDatabase';
 import { LanguageProvider, useLanguage } from '@/context/LanguageContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { Toaster } from 'react-hot-toast';
 
 function ShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -20,7 +21,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const { language, setLanguage, t } = useLanguage();
   const { user, dbStandardsCount, signInWithGoogle, logout } = useAuth();
   const [persona, setPersona] = useState<UserPersona>('manufacturer');
-  const [fontSize, setFontSize] = useState<'small' | 'normal' | 'large'>('normal');
+  const [fontSize, setFontSize] = useState<'small' | 'normal' | 'large'>('large');
   const [standardsList, setStandardsList] = useState(getDynamicStandards());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
@@ -123,7 +124,6 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       items: [
         { href: '/lab-finder', label: 'NABL Lab Finder', icon: MapPin },
         { href: '/testing-mapper', label: 'Testing Mapper', icon: TestTube },
-        { href: '/voice', label: 'Voice Research Assistant', icon: Mic },
         { href: '/multilingual', label: 'Multilingual Search', icon: Globe },
         { href: '/timeline', label: 'Compliance Roadmap', icon: Calendar }
       ]
@@ -613,6 +613,7 @@ export default function GovShell({ children }: { children: React.ReactNode }) {
     <LanguageProvider>
       <AuthProvider>
         <ShellInner>{children}</ShellInner>
+        <Toaster position="bottom-right" />
       </AuthProvider>
     </LanguageProvider>
   );

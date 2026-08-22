@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { 
   Cpu, Send, Shield, CheckCircle2, AlertTriangle, ExternalLink, 
-  ThumbsUp, ThumbsDown, BookOpen, Layers, Sparkles, FileText, RefreshCw 
+  ThumbsUp, ThumbsDown, BookOpen, Layers, Sparkles, FileText, RefreshCw, Mic 
 } from 'lucide-react';
 import { AIResponsePayload, UserPersona } from '@/lib/types';
 import { saveFeedbackLocal } from '@/lib/firebase';
@@ -105,8 +105,8 @@ function AssistantContent() {
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="Ask about Indian Standards, mandatory QCOs, clause requirements, or lab testing..."
             style={{
-              flex: 1, padding: '12px 16px', background: '#FFFCF8',
-              border: '1px solid #E8E2DC', borderRadius: 8,
+              flex: 1, padding: '12px 16px', background: 'transparent',
+              border: 'none', borderBottom: '2px solid #F28C52', borderRadius: 0,
               fontSize: 14, color: '#242424', outline: 'none'
             }}
           />
@@ -123,6 +123,18 @@ function AssistantContent() {
           >
             <Send style={{ width: 16, height: 16 }} />
             <span>{isLoading ? 'Searching Gazette...' : 'Ask BIS AI'}</span>
+          </button>
+          <button
+            onClick={() => { window.location.href = '/voice'; }}
+            title="Voice Research Assistant"
+            style={{
+              background: '#FFFCF8', color: '#F28C52',
+              border: '1px solid #E8E2DC', borderRadius: 8,
+              padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', transition: 'all 0.2s'
+            }}
+          >
+            <Mic style={{ width: 20, height: 20 }} />
           </button>
         </div>
 

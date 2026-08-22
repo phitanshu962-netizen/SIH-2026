@@ -197,7 +197,7 @@ h1, h2, h3, h4, h5, h6 {
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--brand-orange) !important;
-  box-shadow: 0 0 0 3px rgba(242, 140, 82, 0.18) !important;
+  box-shadow: none !important;
 }
 
 /* =============================================

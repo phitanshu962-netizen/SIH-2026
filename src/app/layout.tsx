@@ -2,7 +2,6 @@ import React from 'react';
 import type { Metadata } from 'next';
 import './globals.css';
 import GovShell from './GovShell';
-
 export const metadata: Metadata = {
   title: 'Bureau of Indian Standards - AI Intelligence Platform',
   description: 'Official BIS AI-powered portal for Indian Standards compliance, gap analysis, lab finder, and regulatory navigation.',
