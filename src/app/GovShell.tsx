@@ -174,9 +174,32 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             <span style={{ fontWeight: 700, color: '#171717', letterSpacing: '0.02em' }}>BUREAU OF INDIAN STANDARDS</span>
             <span style={{ color: '#E8E2DC' }}>|</span>
             <span style={{ color: '#686868', fontSize: 11.5 }}>Ministry of Consumer Affairs, Food &amp; Public Distribution</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FFF1E8', color: '#E9783F', border: '1px solid #F4C4A5', borderRadius: 4, padding: '1px 7px', fontSize: 10.5, fontWeight: 700 }}>
-              Standards Lead the Way
-            </span>
+            <div 
+              onClick={() => setCommandOpen(true)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: '#FFFCF8',
+                border: '1px solid #E8E2DC',
+                borderRadius: 8,
+                padding: '4px 10px',
+                cursor: 'pointer',
+                transition: 'all 0.18s ease',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                width: '320px',
+                marginLeft: '16px'
+              }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = '#F4C4A5')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = '#E8E2DC')}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#686868', fontSize: 11.5 }}>
+                <Search style={{ width: 14, height: 14, color: '#F28C52' }} />
+                <span>Search standards, clauses, products...</span>
+              </div>
+              <kbd style={{
+                background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 4,
+                padding: '2px 6px', fontSize: 10, fontWeight: 700, color: '#686868'
+              }}>Ctrl K</kbd>
+            </div>
           </div>
 
           {/* Right: Controls & Account */}
@@ -231,6 +254,21 @@ function ShellInner({ children }: { children: React.ReactNode }) {
                 <option value="bn">বাংলা</option>
               </select>
             </div>
+
+            {/* Admin Button */}
+            <Link
+              href="/admin"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: '#F28C52', color: '#FFFFFF',
+                borderRadius: 6, padding: '4px 10px',
+                fontSize: 11.5, fontWeight: 700, textDecoration: 'none',
+                boxShadow: '0 2px 6px rgba(242,140,82,0.25)', transition: 'all 0.15s'
+              }}
+            >
+              <BarChart3 style={{ width: 13, height: 13 }} />
+              <span>Admin</span>
+            </Link>
 
             {/* Auth Button */}
             {user ? (
@@ -293,64 +331,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             </div>
           </Link>
 
-          {/* Central Command Palette Trigger */}
-          <div 
-            onClick={() => setCommandOpen(true)}
-            style={{
-              flex: '0 1 480px',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              background: '#FFFCF8',
-              border: '1px solid #E8E2DC',
-              borderRadius: 8,
-              padding: '8px 14px',
-              cursor: 'pointer',
-              transition: 'all 0.18s ease',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-            }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = '#F4C4A5')}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = '#E8E2DC')}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#686868', fontSize: 13 }}>
-              <Search style={{ width: 16, height: 16, color: '#F28C52' }} />
-              <span>Search standards, clauses, products, documents...</span>
-            </div>
-            <kbd style={{
-              background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 4,
-              padding: '2px 6px', fontSize: 11, fontWeight: 700, color: '#686868'
-            }}>Ctrl K</kbd>
-          </div>
-
-          {/* Quick Actions / Alerts */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Link
-              href="/alerts"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                background: '#FFFCF8', border: '1px solid #E8E2DC',
-                borderRadius: 8, padding: '7px 12px', color: '#242424',
-                fontSize: 12.5, fontWeight: 600, textDecoration: 'none'
-              }}
-            >
-              <Bell style={{ width: 15, height: 15, color: '#F28C52' }} />
-              <span>Alerts</span>
-              <span style={{ background: '#FFF1E8', color: '#E9783F', border: '1px solid #F4C4A5', borderRadius: 10, padding: '0 6px', fontSize: 10, fontWeight: 800 }}>3</span>
-            </Link>
-
-            <Link
-              href="/admin"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                background: '#F28C52', color: '#FFFFFF',
-                borderRadius: 8, padding: '7px 14px',
-                fontSize: 12.5, fontWeight: 700, textDecoration: 'none',
-                boxShadow: '0 2px 6px rgba(242,140,82,0.25)', transition: 'all 0.15s'
-              }}
-            >
-              <BarChart3 style={{ width: 15, height: 15 }} />
-              <span>Ingestion Admin</span>
-            </Link>
-          </div>
-
+          {/* Right side is intentionally left blank because we moved tools to utility stripe */}
         </div>
       </header>
 

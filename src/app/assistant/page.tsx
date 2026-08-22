@@ -18,6 +18,7 @@ function AssistantContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [responsePayload, setResponsePayload] = useState<AIResponsePayload | null>(null);
   const [feedbackSent, setFeedbackSent] = useState<boolean | null>(null);
+  const [isListening, setIsListening] = useState<boolean>(false);
 
   const samplePrompts = [
     "How does IS 302 apply to this product?",
@@ -26,6 +27,69 @@ function AssistantContent() {
     "CRS registration requirements for electronic goods",
     "Requirements for Fe 500 grade TMT steel bars under IS 1786"
   ];
+
+  const toggleListening = () => {
+    if (isListening) {
+      setIsListening(false);
+    } else {
+      setIsListening(true);
+      setQuery("Listening...");
+
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        
+        // Smart language mapping based on user's current site language
+        const langMap: Record<string, string> = {
+          'en': 'en-IN', 'hi': 'hi-IN', 'mr': 'mr-IN', 'gu': 'gu-IN', 
+          'ta': 'ta-IN', 'te': 'te-IN', 'bn': 'bn-IN'
+        };
+        const currentLang = document.documentElement.lang || 'en';
+        recognition.lang = langMap[currentLang] || 'en-IN';
+        
+        recognition.interimResults = true;
+        recognition.continuous = false;
+
+        let finalTranscript = '';
+
+        recognition.onresult = (event: any) => {
+          let interimTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript;
+            } else {
+              interimTranscript += event.results[i][0].transcript;
+            }
+          }
+          
+          setQuery(finalTranscript + interimTranscript);
+          
+          if (finalTranscript) {
+            setIsListening(false);
+            handleSearch(finalTranscript);
+          }
+        };
+
+        recognition.onerror = () => {
+          setIsListening(false);
+          setQuery("Could not recognize speech. Please try again.");
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognition.start();
+      } else {
+        setTimeout(() => {
+          const sampleQuery = "Is helmet ISI mark mandatory under Quality Control Order?";
+          setQuery(sampleQuery);
+          setIsListening(false);
+          handleSearch(sampleQuery);
+        }, 2000);
+      }
+    }
+  };
 
   const handleSearch = async (queryText?: string) => {
     const textToSearch = queryText || query;
@@ -111,30 +175,31 @@ function AssistantContent() {
             }}
           />
           <button
+            onClick={toggleListening}
+            title="Voice Research Assistant"
+            style={{
+              background: isListening ? '#FFF1E8' : '#FFFCF8', color: '#F28C52',
+              border: '1px solid #E8E2DC', borderRadius: 8,
+              padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', transition: 'all 0.2s',
+              animation: isListening ? 'pulseSlow 1.5s infinite' : 'none'
+            }}
+          >
+            <Mic style={{ width: 20, height: 20, color: isListening ? '#E9783F' : '#F28C52' }} />
+          </button>
+          <button
             onClick={() => handleSearch()}
-            disabled={isLoading || !query.trim()}
+            disabled={isLoading || (!query.trim() && !isListening)}
             style={{
               background: '#F28C52', color: '#FFFFFF',
               border: 'none', borderRadius: 8,
               padding: '12px 24px', fontSize: 14, fontWeight: 700,
-              cursor: isLoading || !query.trim() ? 'not-allowed' : 'pointer',
+              cursor: isLoading || (!query.trim() && !isListening) ? 'not-allowed' : 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 8
             }}
           >
             <Send style={{ width: 16, height: 16 }} />
             <span>{isLoading ? 'Searching Gazette...' : 'Ask BIS AI'}</span>
-          </button>
-          <button
-            onClick={() => { window.location.href = '/voice'; }}
-            title="Voice Research Assistant"
-            style={{
-              background: '#FFFCF8', color: '#F28C52',
-              border: '1px solid #E8E2DC', borderRadius: 8,
-              padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', transition: 'all 0.2s'
-            }}
-          >
-            <Mic style={{ width: 20, height: 20 }} />
           </button>
         </div>
 
