@@ -255,22 +255,22 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       {
         title: 'DASHBOARD',
         items: [
-          { href: '/', label: 'Overview Command Center', icon: Home }
+          { href: '/', label: 'Dashboard Overview', icon: Home }
         ]
       },
       {
         title: 'STANDARDS',
         items: [
-          { href: '/matcher', label: 'All Standards Catalog', icon: Search, badge: activePersona === 'consumer' ? 'Verify' : undefined },
-          { href: '/comparator', label: 'Standard Versions & Diffs', icon: GitCompare, badge: activePersona === 'importer' ? 'Diffs' : undefined },
-          { href: '/citations', label: 'Clause Research & Citations', icon: BookOpen, badge: activePersona === 'consumer' ? 'Citations' : undefined }
+          { href: '/matcher', label: 'Standards Catalog', icon: Search, badge: activePersona === 'consumer' ? 'Verify' : undefined },
+          { href: '/comparator', label: 'Versions & Diffs', icon: GitCompare, badge: activePersona === 'importer' ? 'Diffs' : undefined },
+          { href: '/citations', label: 'Research Citations', icon: BookOpen, badge: activePersona === 'consumer' ? 'Citations' : undefined }
         ]
       },
       {
         title: 'ANALYSIS',
         items: [
-          { href: '/gap-analyzer', label: 'Gap Analyzer', icon: FileSearch, badge: activePersona === 'manufacturer' ? 'STI Focus' : undefined },
-          { href: '/comparator', label: 'Version Comparator', icon: GitCompare },
+          { href: '/gap-analyzer', label: 'Gap Analysis', icon: FileSearch, badge: activePersona === 'manufacturer' ? 'STI Focus' : undefined },
+          { href: '/comparator', label: 'Version Comparison', icon: GitCompare },
           { href: '/matcher', label: 'Product Standard Matcher', icon: Search }
         ]
       },
@@ -278,22 +278,22 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         title: 'COMPLIANCE',
         items: [
           { href: '/citations', label: 'Clause Citations', icon: BookOpen },
-          { href: '/checklist', label: 'Interactive Checklist', icon: CheckSquare, badge: activePersona === 'msme' ? '50% Fee' : undefined },
-          { href: '/services', label: 'Scheme & Statutory Logic', icon: Sparkles, badge: (activePersona === 'msme' || activePersona === 'importer') ? 'CRS/FMCS' : undefined },
-          { href: '/explainability', label: 'Legal Tree Rationale', icon: HelpCircle }
+          { href: '/checklist', label: 'Compliance Checklist', icon: CheckSquare, badge: activePersona === 'msme' ? '50% Fee' : undefined },
+          { href: '/services', label: 'Schemes & Rules', icon: Sparkles, badge: (activePersona === 'msme' || activePersona === 'importer') ? 'CRS/FMCS' : undefined },
+          { href: '/explainability', label: 'Legal Rationale', icon: HelpCircle }
         ]
       },
       {
         title: 'KNOWLEDGE',
         items: [
-          { href: '/ask-pdf', label: 'Ask My PDF (RAG)', icon: FileText, badge: activePersona === 'importer' ? 'Custom RAG' : undefined },
-          { href: '/admin', label: 'Standard Ingestion & Admin', icon: BarChart3 }
+          { href: '/ask-pdf', label: 'PDF Document Summarizer', icon: FileText, badge: activePersona === 'importer' ? 'Custom RAG' : undefined },
+          { href: '/admin', label: 'Admin Standards Manager', icon: BarChart3 }
         ]
       },
       {
         title: 'MONITORING',
         items: [
-          { href: '/alerts', label: 'QCO Change Alerts', icon: Bell, badge: activePersona === 'importer' ? 'Customs Alerts' : undefined },
+          { href: '/alerts', label: 'QCO Alerts', icon: Bell, badge: activePersona === 'importer' ? 'Customs Alerts' : undefined },
           { href: '/evidence-verifier', label: 'Evidence Verifier', icon: CheckCircle2, badge: activePersona === 'consumer' ? 'HUID Seal' : undefined }
         ]
       },
