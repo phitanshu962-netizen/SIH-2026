@@ -17,7 +17,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { t } = useLanguage();
   const [quickQuery, setQuickQuery] = useState('');
-  const [standardsList, setStandardsList] = useState<BISStandard[]>([]);
+  const [standardsList, setStandardsList] = useState<BISStandard[]>(() => getDynamicStandards());
   const [currentPersona, setCurrentPersona] = useState<UserPersona>('manufacturer');
 
   useEffect(() => {

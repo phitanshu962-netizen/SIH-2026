@@ -646,15 +646,256 @@ let dynamicStandardsStore: BISStandard[] = [
 ];
 
 export function getDynamicStandards(): BISStandard[] {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('bis_dynamic_standards');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          dynamicStandardsStore = parsed;
+          return dynamicStandardsStore;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not read bis_dynamic_standards from localStorage", e);
+    }
+  }
   return dynamicStandardsStore;
 }
 
 export function setDynamicStandardsStore(standards: BISStandard[]): void {
   dynamicStandardsStore = standards;
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('bis_dynamic_standards', JSON.stringify(standards));
+      window.dispatchEvent(new CustomEvent('bis_standards_updated', { detail: { count: standards.length } }));
+    } catch (e) {
+      console.warn("Could not save bis_dynamic_standards to localStorage", e);
+    }
+  }
 }
 
 export function addDynamicStandard(standard: BISStandard): void {
-  dynamicStandardsStore.unshift(standard);
+  const current = getDynamicStandards();
+  const existingIdx = current.findIndex(
+    s => s.id === standard.id || s.isNumber.trim().toLowerCase() === standard.isNumber.trim().toLowerCase()
+  );
+  
+  if (existingIdx >= 0) {
+    current[existingIdx] = standard;
+  } else {
+    current.unshift(standard);
+  }
+  
+  dynamicStandardsStore = current;
+  
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('bis_dynamic_standards', JSON.stringify(current));
+      
+      const customList = JSON.parse(localStorage.getItem('bis_custom_standards') || '[]');
+      const cIdx = customList.findIndex((s: any) => s.id === standard.id || s.isNumber === standard.isNumber);
+      if (cIdx >= 0) {
+        customList[cIdx] = standard;
+      } else {
+        customList.unshift(standard);
+      }
+      localStorage.setItem('bis_custom_standards', JSON.stringify(customList));
+
+      window.dispatchEvent(new CustomEvent('bis_standards_updated', { detail: { count: current.length, standard } }));
+    } catch (e) {
+      console.warn("Could not persist custom standard to localStorage", e);
+    }
+  }
+}
+
+/**
+ * Intelligent Parser for Official BIS Standards documents (PDF, TXT, JSON, MD)
+ */
+export function parseBisDocumentContent(fileName: string, rawText: string): BISStandard {
+  const cleanName = fileName.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+
+  // 1. Check if raw text is JSON formatted BISStandard
+  if (rawText.trim().startsWith('{') && rawText.trim().endsWith('}')) {
+    try {
+      const parsed = JSON.parse(rawText);
+      if (parsed.isNumber || parsed.title) {
+        return {
+          id: parsed.id || `is-custom-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          isNumber: parsed.isNumber || `IS ${Math.floor(1000 + Math.random() * 9000)}:2026`,
+          title: parsed.title || cleanName,
+          category: parsed.category || "Custom BIS Ingested Standard",
+          scope: parsed.scope || (rawText.slice(0, 200) + "..."),
+          mandatoryStatus: parsed.mandatoryStatus || 'Mandatory (QCO)',
+          applicableScheme: parsed.applicableScheme || 'Scheme-I (ISI Mark)',
+          targetAudience: parsed.targetAudience || ["Manufacturers", "Importers", "MSMEs"],
+          keyRequirements: parsed.keyRequirements || [parsed.title || cleanName],
+          requiredDocuments: parsed.requiredDocuments || ["NABL Test Report", "Factory QA Manual"],
+          testingParameters: parsed.testingParameters || ["Routine Conformity Testing", "Safety Parameters"],
+          officialUrl: parsed.officialUrl || "https://www.services.bis.gov.in",
+          lastUpdated: parsed.lastUpdated || "2026 Gazette Revision",
+          clauseReferences: parsed.clauseReferences || [
+            { clause: "Clause 1", description: "Scope and applicability of official standard." },
+            { clause: "Clause 4", description: "General safety, construction, and performance specifications." }
+          ]
+        };
+      }
+    } catch {
+      // Fall through to text extraction
+    }
+  }
+
+  // 2. Extract IS Number (e.g. "IS 302-2-3", "IS 15298 (Part 2)", "IS 4151:2020")
+  let isNumber = "";
+  const isMatchInText = rawText.match(/\b(IS\s*(?:\/IEC\s*)?\d+(?:[\s\-/]*(?:Part|Sec|Section)\s*[\d/]+)?(?:[\s\-/]*\d+)?(?:\s*:\s*\d{4})?)\b/i);
+  const isMatchInName = cleanName.match(/\b(IS\s*\d+[\d\s\-/]*)/i);
+
+  if (isMatchInText) {
+    isNumber = isMatchInText[1].replace(/\s+/g, ' ').toUpperCase();
+    if (!isNumber.includes(':')) {
+      const yearMatch = rawText.match(/:\s*(19\d\d|20\d\d)/);
+      if (yearMatch) isNumber += yearMatch[0].replace(/\s+/g, '');
+      else isNumber += ":2026";
+    }
+  } else if (isMatchInName) {
+    isNumber = isMatchInName[1].toUpperCase() + ":2026";
+  } else {
+    isNumber = `IS ${Math.floor(1000 + Math.random() * 9000)}:2026`;
+  }
+
+  // 3. Extract Document Title
+  let title = "";
+  const titlePatterns = [
+    /Indian Standard\s*\n+([^\n\r]{10,120})/i,
+    /Indian Standard\s*[-–—:]\s*([^\n\r]{10,120})/i,
+    /(?:Specification|Requirements)\s+for\s+([^\n\r]{10,120})/i,
+    /Title\s*:\s*([^\n\r]{10,120})/i,
+    /Safety\s+of\s+([^\n\r]{10,120})/i
+  ];
+
+  for (const pat of titlePatterns) {
+    const m = rawText.match(pat);
+    if (m && m[1] && m[1].trim().length > 5) {
+      title = m[1].trim().replace(/^[\s\-–—:]+/, '').replace(/[\s\-–—:]+$/, '');
+      break;
+    }
+  }
+
+  if (!title) {
+    // Infer title from fileName
+    title = cleanName
+      .replace(/IS\s*\d+[\d\s\-_]*/gi, '')
+      .replace(/\b(pdf|txt|doc|docx|standard|specification|gazette|official|download)\b/gi, '')
+      .trim();
+    if (!title || title.length < 3) {
+      title = `${isNumber} Official BIS Technical Specification`;
+    } else {
+      title = title.charAt(0).toUpperCase() + title.slice(1) + " Specification";
+    }
+  }
+
+  // 4. Determine Category & Applicable Scheme
+  const lowerAll = (title + " " + rawText + " " + cleanName).toLowerCase();
+  let category = "General Engineering & Industrial Products";
+  let scheme: BISStandard['applicableScheme'] = 'Scheme-I (ISI Mark)';
+  let mandatoryStatus: BISStandard['mandatoryStatus'] = 'Mandatory (QCO)';
+
+  if (lowerAll.includes('toy') || lowerAll.includes('game') || lowerAll.includes('doll')) {
+    category = "Toys & Children Safety";
+    scheme = "Scheme-I (ISI Mark)";
+  } else if (lowerAll.includes('footwear') || lowerAll.includes('shoe') || lowerAll.includes('boot') || lowerAll.includes('helmet') || lowerAll.includes('ppe') || lowerAll.includes('mask') || lowerAll.includes('glove')) {
+    category = "Personal Protective Equipment (PPE)";
+    scheme = "Scheme-I (ISI Mark)";
+  } else if (lowerAll.includes('electric') || lowerAll.includes('iron') || lowerAll.includes('socket') || lowerAll.includes('switch') || lowerAll.includes('cable') || lowerAll.includes('heater') || lowerAll.includes('appliance')) {
+    category = "Electrical Safety & Domestic Appliances";
+    scheme = "Scheme-I (ISI Mark)";
+  } else if (lowerAll.includes('server') || lowerAll.includes('laptop') || lowerAll.includes('computer') || lowerAll.includes('led') || lowerAll.includes('adapter') || lowerAll.includes('display') || lowerAll.includes('crs')) {
+    category = "Electronics & IT Equipment (CRS)";
+    scheme = "CRS (Compulsory Registration)";
+    mandatoryStatus = "CRS Mandatory";
+  } else if (lowerAll.includes('cement') || lowerAll.includes('steel') || lowerAll.includes('pipe') || lowerAll.includes('bar') || lowerAll.includes('brick') || lowerAll.includes('concrete')) {
+    category = "Construction Materials & Structural Steel";
+    scheme = "Scheme-I (ISI Mark)";
+  } else if (lowerAll.includes('battery') || lowerAll.includes('cell') || lowerAll.includes('accumulator') || lowerAll.includes('lithium')) {
+    category = "Battery & Energy Storage Systems";
+    scheme = "CRS (Compulsory Registration)";
+    mandatoryStatus = "CRS Mandatory";
+  } else if (lowerAll.includes('gold') || lowerAll.includes('silver') || lowerAll.includes('jewellery') || lowerAll.includes('hallmark')) {
+    category = "Precious Metals & Jewellery";
+    scheme = "Hallmarking";
+  } else if (lowerAll.includes('water') || lowerAll.includes('food') || lowerAll.includes('milk') || lowerAll.includes('oil') || lowerAll.includes('bottle')) {
+    category = "Food, Dairy & Packaged Drinking Water";
+    scheme = "Scheme-I (ISI Mark)";
+  }
+
+  // 5. Extract Scope
+  let scope = "";
+  const scopeMatch = rawText.match(/(?:1\s*\.?\s*SCOPE|SCOPE\s*(?:AND\s*FIELD\s*OF\s*APPLICATION)?)\s*[:\n\r]+([\s\S]{30,400}?)(?:\n\s*\d+\.|\n\s*Clause\s*\d+|2\s*\.|\n\s*REFERENCES)/i);
+  if (scopeMatch && scopeMatch[1]) {
+    scope = scopeMatch[1].replace(/\s+/g, ' ').trim();
+  } else {
+    scope = `Prescribes safety, manufacturing, quality conformity limits, and sampling guidelines for ${title} under Bureau of Indian Standards regulations.`;
+  }
+
+  // 6. Extract Clause References
+  const clauseReferences: { clause: string; description: string }[] = [];
+  const clauseRegex = /(?:Clause|Section|\b)\s*(\d+(?:\.\d+)*)\s*[-–—:]\s*([^\n\r]{10,200})/gi;
+  let match;
+  let count = 0;
+  while ((match = clauseRegex.exec(rawText)) !== null && count < 6) {
+    clauseReferences.push({
+      clause: `Clause ${match[1]}`,
+      description: match[2].trim()
+    });
+    count++;
+  }
+
+  if (clauseReferences.length === 0) {
+    clauseReferences.push(
+      { clause: "Clause 1", description: "Scope, terminology, and applicable product classification." },
+      { clause: "Clause 4", description: "General construction, material quality, and safety requirements." },
+      { clause: "Clause 7", description: "Marking, labeling, ISI / CRS mark placement, and user instruction manual." },
+      { clause: "Clause 13", description: "Electrical insulation, mechanical durability, and performance testing." },
+      { clause: "Clause 19", description: "Abnormal condition safety, thermal limits, and overload protection." }
+    );
+  }
+
+  // 7. Extract Key Requirements & Testing Parameters
+  const keyRequirements = [
+    `Conformity to ${isNumber} statutory performance guidelines`,
+    "Mandatory Factory In-House Quality Control & Calibration Log",
+    "Product safety testing in BIS Recognized NABL Testing Laboratory",
+    "Standard BIS marking and batch traceability information on packaging"
+  ];
+
+  const testingParameters = [
+    "Safety & Construction Integrity Check",
+    "Electrical / Mechanical Stress Testing",
+    "Environmental & Endurance Limits",
+    "Marking Durability & Label Verification"
+  ];
+
+  return {
+    id: `is-ingested-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+    isNumber,
+    title,
+    category,
+    scope,
+    mandatoryStatus,
+    applicableScheme: scheme,
+    targetAudience: ["Domestic Manufacturers", "Importers", "MSME Producers", "Authorized BIS Laboratories"],
+    keyRequirements,
+    requiredDocuments: [
+      "Factory Quality Control Manual & Calibration Log",
+      "Valid NABL Lab Test Report under " + isNumber,
+      "Raw Material Test Certificates & Supplier Traceability",
+      "Process Flowchart & Manufacturing Machinery Details"
+    ],
+    testingParameters,
+    officialUrl: "https://www.services.bis.gov.in",
+    lastUpdated: new Date().toISOString().split('T')[0] + " (Official Portal Ingest)",
+    clauseReferences
+  };
 }
 
 

@@ -69,8 +69,8 @@ function renderFormattedRationale(text: string) {
 }
 
 export default function LegalTreeRationalePage() {
-  const standardsList = getDynamicStandards();
-  const [selectedStandardId, setSelectedStandardId] = useState<string>(standardsList[0]?.id || 'is-302-2-3');
+  const [standardsList, setStandardsList] = useState<BISStandard[]>(() => getDynamicStandards());
+  const [selectedStandardId, setSelectedStandardId] = useState<string>('is-302-2-3');
   const [inputMode, setInputMode] = useState<'standard' | 'product'>('standard');
   const [viewMode, setViewMode] = useState<'simple' | 'engineer' | 'legal'>('engineer');
   
@@ -103,11 +103,31 @@ export default function LegalTreeRationalePage() {
 
   // Load Legal Tree Data
   const [treeData, setTreeData] = useState<LegalTreeData>(() => 
-    getLegalTreeDataForStandard(selectedStandardId)
+    getLegalTreeDataForStandard('is-302-2-3')
   );
 
   useEffect(() => {
-    setTreeData(getLegalTreeDataForStandard(selectedStandardId));
+    const list = getDynamicStandards();
+    setStandardsList(list);
+    if (list.length > 0) {
+      if (!selectedStandardId || !list.some(s => s.id === selectedStandardId)) {
+        setSelectedStandardId(list[0].id);
+      }
+    }
+
+    const handleUpdate = () => {
+      const updated = getDynamicStandards();
+      setStandardsList(updated);
+    };
+
+    window.addEventListener('bis_standards_updated', handleUpdate);
+    return () => window.removeEventListener('bis_standards_updated', handleUpdate);
+  }, []);
+
+  useEffect(() => {
+    if (selectedStandardId) {
+      setTreeData(getLegalTreeDataForStandard(selectedStandardId));
+    }
   }, [selectedStandardId]);
 
   // Auto scroll to top when opening a dedicated node view

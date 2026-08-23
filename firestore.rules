@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Standards collections (official and custom ingested standards)
+    match /bis_standards/{standardId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    match /custom_standards/{standardId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    match /standards/{standardId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // User Profiles
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Audit and Gap Analysis Reports
+    match /gap_analysis_reports/{reportId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    match /audit_logs/{logId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Feedback and System Logs
+    match /feedback_logs/{feedbackId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    match /document_analyses/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Default fallback
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -6,6 +6,7 @@ import {
   MapPin, Search, Phone, Mail, CheckCircle2, Clock, Send
 } from 'lucide-react';
 import { getTestingLabs } from '@/lib/data/bisDatabase';
+import { saveLabInquiryToFirebase } from '@/lib/firebase';
 
 export default function LabFinderPage() {
   const labs = getTestingLabs();
@@ -23,6 +24,14 @@ export default function LabFinderPage() {
 
   const handleSendInquiry = (labId: string) => {
     setInquirySent(labId);
+    const targetLab = labs.find(l => l.id === labId);
+    saveLabInquiryToFirebase({
+      labId,
+      labName: targetLab?.name || labId,
+      location: targetLab?.location,
+      standardsCovered: targetLab?.standardsCovered,
+      inquiryType: 'sample_testing_quotation'
+    });
     setTimeout(() => setInquirySent(null), 3000);
   };
 
