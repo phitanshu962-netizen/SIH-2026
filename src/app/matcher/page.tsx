@@ -422,7 +422,7 @@ function MatcherContent() {
 
 export default function MatcherPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 24, textAlign: 'center' }}>Loading BIS Product Matcher...</div>}>
+    <Suspense fallback={<div className="p-6 text-center text-sm font-bold text-slate-600 animate-pulse">Loading BIS Product Matcher...</div>}>
       <MatcherContent />
     </Suspense>
   );

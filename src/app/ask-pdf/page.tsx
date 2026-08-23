@@ -3,9 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
-  FileText, Upload, Send, BookOpen, CheckCircle2, 
-  Sparkles, Layers, ShieldCheck, Eye, ArrowRight, Download,
-  CheckSquare, Wrench, ShieldAlert, GitCompare, Scale, Info
+  FileText, Upload, Send, Bot, User, BookOpen, CheckCircle2, 
+  Sparkles, RefreshCw, ChevronRight, FileCheck, AlertTriangle, BookOpenCheck,
+  Layers, ShieldCheck, Eye, ArrowRight, Download, CheckSquare, Wrench, 
+  ShieldAlert, GitCompare, Scale, Info
 } from 'lucide-react';
 import { ingestPdfDocumentPipeline, queryPdfDocumentRag, getDynamicStandards } from '@/lib/data/bisDatabase';
 import { saveDocumentQueryToFirebase } from '@/lib/firebase';
@@ -51,6 +52,10 @@ export default function AskPDFPage() {
     }
   ]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadStatus, setUploadStatus] = useState<string>('');
+  const [chunksCount, setChunksCount] = useState<number>(0);
+  const [isIndexed, setIsIndexed] = useState<boolean>(false);
 
   useEffect(() => {
     setStandards(getDynamicStandards());
@@ -87,24 +92,64 @@ export default function AskPDFPage() {
     ]);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Ingest and index custom PDF
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setFileName(file.name);
-      const data = ingestPdfDocumentPipeline(file.name);
-      setIngestionData(data);
+    if (!file) return;
+    setFileName(file.name);
+    setIsUploading(true);
+    setUploadStatus('Uploading PDF...');
+    setIsIndexed(false);
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      setUploadStatus('Parsing text & generating vector embeddings...');
+      const response = await fetch('/api/pdf/upload', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to process PDF file.');
+      }
+      
+      setChunksCount(data.chunksCount);
+      setIsIndexed(true);
+      setUploadStatus('Indexing complete!');
+
+      // Populate visual ingestion data client-side as well
+      const localIngestion = ingestPdfDocumentPipeline(file.name);
+      setIngestionData(localIngestion);
+
       setMessages([
         {
           sender: 'bot',
-          text: `Document loaded & vector indexed: ${file.name} (${data.overview.totalPages} Pages). Select any page on the left or type a question to research.`,
-          confidence: 'HIGH CONFIDENCE',
+          text: `Document successfully parsed, embedded and stored in database: "${file.name}" (${data.chunksCount} chunks).\n\nAsk any question (e.g., "Summarize this PDF" or technical questions) and I will search the vector database and answer using local AI.`,
+          citations: [],
+          confidence: 'SUCCESS',
           sourceQuality: 'DIRECT EVIDENCE'
         }
       ]);
+    } catch (err: any) {
+      console.error(err);
+      setUploadStatus('Indexing failed.');
+      setMessages([
+        {
+          sender: 'bot',
+          text: `Error indexing document: ${err.message || err}. Please verify that the local Ollama server is running and the "nomic-embed-text" model is pulled.`,
+          confidence: 'FAILED',
+          sourceQuality: 'NONE'
+        }
+      ]);
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  const handleSendQuery = (customQuery?: string) => {
+  const handleSendQuery = async (customQuery?: string) => {
     const textToRun = customQuery || inputQuery;
     if (!textToRun.trim()) return;
 
@@ -112,28 +157,80 @@ export default function AskPDFPage() {
     if (!customQuery) setInputQuery('');
     setIsProcessing(true);
 
-    setTimeout(() => {
-      const ragResponse = queryPdfDocumentRag(textToRun, ingestionData.overview);
+    if (!isIndexed && fileName === 'IS_302_Electric_Iron_Standard.pdf') {
+      setTimeout(() => {
+        const ragResponse = queryPdfDocumentRag(textToRun, ingestionData.overview);
+        setMessages(prev => [
+          ...prev,
+          {
+            sender: 'bot',
+            text: ragResponse.answerText,
+            citations: ragResponse.citations,
+            confidence: ragResponse.confidence,
+            sourceQuality: ragResponse.sourceQuality,
+            safeRewrite: ragResponse.evidenceSafeRewrite
+          }
+        ]);
+        setIsProcessing(false);
+      }, 600);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/pdf/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: textToRun,
+          fileName: fileName
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to query PDF standard.');
+      }
+
+      const mappedCitations: RagPageCitation[] = (data.citations || []).map((c: any) => ({
+        pageNumber: c.pageNumber,
+        clauseRef: 'Extracted Passage',
+        excerptText: c.snippet,
+        documentTitle: fileName,
+        matchedPhrase: c.snippet.length > 60 ? c.snippet.slice(0, 60) + '...' : c.snippet
+      }));
+
       setMessages(prev => [
         ...prev,
         {
           sender: 'bot',
-          text: ragResponse.answerText,
-          citations: ragResponse.citations,
-          confidence: ragResponse.confidence,
-          sourceQuality: ragResponse.sourceQuality,
-          safeRewrite: ragResponse.evidenceSafeRewrite
+          text: data.answer,
+          citations: mappedCitations,
+          confidence: data.modelUsed || 'HIGH CONFIDENCE',
+          sourceQuality: 'DIRECT EVIDENCE',
+          safeRewrite: data.answer
         }
       ]);
       saveDocumentQueryToFirebase({
         fileName,
         query: textToRun,
-        answer: ragResponse.answerText,
-        citationsCount: ragResponse.citations?.length || 0,
-        confidence: ragResponse.confidence
+        answer: data.answer,
+        citationsCount: mappedCitations.length,
+        confidence: data.modelUsed || 'HIGH CONFIDENCE'
       });
+    } catch (err: any) {
+      console.error(err);
+      setMessages(prev => [
+        ...prev,
+        {
+          sender: 'bot',
+          text: `Error retrieving answer: ${err.message || err}. Ensure local Ollama service is active.`,
+          confidence: 'ERROR',
+          sourceQuality: 'NONE'
+        }
+      ]);
+    } finally {
       setIsProcessing(false);
-    }, 600);
+    }
   };
 
   // Find Clause Metadata for Currently Selected Page
@@ -238,10 +335,16 @@ export default function AskPDFPage() {
           {/* Active File Summary */}
           <div style={{ background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: '#686868', textTransform: 'uppercase' }}>Active Knowledge Object</div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#171717' }}>{ingestionData.overview.fileName}</div>
-            <div style={{ fontSize: 11.5, color: '#4F7D5A', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <CheckCircle2 style={{ width: 13, height: 13, color: '#4F7D5A' }} />
-              <span>Status: READY FOR RESEARCH ({ingestionData.overview.classificationConfidence}% Confidence)</span>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#171717' }}>{fileName}</div>
+            <div style={{ fontSize: 11.5, color: isIndexed ? '#4F7D5A' : isUploading ? '#D97706' : '#686868', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {isUploading ? (
+                <RefreshCw style={{ width: 13, height: 13, color: '#D97706', animation: 'spin 1s linear infinite' }} />
+              ) : (
+                <CheckCircle2 style={{ width: 13, height: 13, color: isIndexed ? '#4F7D5A' : '#686868' }} />
+              )}
+              <span>
+                Status: {isUploading ? uploadStatus : isIndexed ? `Vector Indexed (${chunksCount} Chunks)` : `READY FOR RESEARCH (${ingestionData.overview.classificationConfidence}% Confidence)`}
+              </span>
             </div>
           </div>
         </div>

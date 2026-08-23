@@ -8,7 +8,7 @@ import {
   FileSearch, GitCompare, HelpCircle, Bell, FileText, Mic, Calendar,
   TestTube, MapPin, CheckCircle2, Sparkles, LogOut, Command, ChevronLeft,
   ChevronRight, X, ArrowUpRight, Cpu, SlidersHorizontal, Home, ExternalLink,
-  ThumbsUp, ThumbsDown
+  ThumbsUp, ThumbsDown, Volume2, VolumeX
 } from 'lucide-react';
 import { UserPersona, LanguageCode } from '@/lib/types';
 import { getDynamicStandards, processAssistantResearchAgent } from '@/lib/data/bisDatabase';
@@ -16,6 +16,28 @@ import { AssistantAgentResponse } from '@/lib/types';
 import { saveFeedbackLocal } from '@/lib/firebase';
 import { LanguageProvider, useLanguage } from '@/context/LanguageContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { speakAudioResponse, stopAudioPlayback } from '@/lib/voiceAssistantHelper';
+
+function FormattedMarkdown({ content, isUser }: { content: string; isUser: boolean }) {
+  const lines = content.split('\n');
+  return (
+    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: isUser ? '#FFFFFF' : '#171717', fontSize: 12.5, lineHeight: 1.55 }}>
+      {lines.map((line, lIdx) => {
+        const parts = line.split(/(\*\*.*?\*\*)/g);
+        return (
+          <div key={lIdx} style={{ marginBottom: line.trim() === '' ? 4 : 2 }}>
+            {parts.map((part, pIdx) => {
+              if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={pIdx} style={{ fontWeight: 800 }}>{part.slice(2, -2)}</strong>;
+              }
+              return part;
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function ShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -62,8 +84,36 @@ function ShellInner({ children }: { children: React.ReactNode }) {
     }
   ]);
   const [panelProcessing, setPanelProcessing] = useState(false);
+  const [panelListening, setPanelListening] = useState(false);
+  const [panelSpeaking, setPanelSpeaking] = useState(false);
 
-  const handleSendPanelMessage = async (customQuery?: string) => {
+  const startPanelVoiceInput = () => {
+    if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-IN';
+      recognition.interimResults = false;
+
+      stopAudioPlayback();
+      setPanelListening(true);
+      recognition.onresult = (event: any) => {
+        const text = event.results[0][0].transcript;
+        setPanelInputQuery(text);
+        setPanelListening(false);
+        handleSendPanelMessage(text, true);
+      };
+
+      recognition.onerror = () => setPanelListening(false);
+      recognition.onend = () => setPanelListening(false);
+      try {
+        recognition.start();
+      } catch (e) {
+        setPanelListening(false);
+      }
+    }
+  };
+
+  const handleSendPanelMessage = async (customQuery?: string, isFromVoice: boolean = false) => {
     const textToRun = customQuery || panelInputQuery;
     if (!textToRun.trim()) return;
 
@@ -80,14 +130,16 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
       if (res.ok) {
         const data = await res.json();
+        const replyText = data.summaryExplanation;
+        
         setPanelMessages(prev => [
           ...prev,
           {
             sender: 'bot',
-            text: data.summaryExplanation,
+            text: replyText,
             agentResponse: {
               intentCategory: 'RESEARCH',
-              responseText: data.summaryExplanation,
+              responseText: replyText,
               sources: (data.citations || []).map((c: any) => ({
                 title: c.title || c.standardNumber || 'Official BIS Standard',
                 documentType: 'Official BIS Standard',
@@ -113,6 +165,14 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             }
           }
         ]);
+
+        // Speak response out loud if initiated via voice or active panel
+        speakAudioResponse(
+          replyText,
+          () => setPanelSpeaking(true),
+          () => setPanelSpeaking(false)
+        );
+
       } else {
         throw new Error('API route returned error status');
       }
@@ -131,6 +191,12 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           agentResponse: response
         }
       ]);
+
+      speakAudioResponse(
+        response.responseText,
+        () => setPanelSpeaking(true),
+        () => setPanelSpeaking(false)
+      );
     } finally {
       setPanelProcessing(false);
     }
@@ -236,7 +302,6 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         items: [
           { href: '/lab-finder', label: 'NABL Lab Finder', icon: MapPin, badge: activePersona === 'manufacturer' ? 'NABL Mapping' : undefined },
           { href: '/testing-mapper', label: 'Testing Mapper', icon: TestTube, badge: activePersona === 'manufacturer' ? 'Lab Equipment' : undefined },
-          { href: '/voice', label: 'Voice Research Assistant', icon: Mic },
           { href: '/timeline', label: 'Compliance Roadmap', icon: Calendar, badge: activePersona === 'msme' ? 'MSME Roadmap' : undefined }
         ]
       },
@@ -293,7 +358,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <div id="google_translate_element" style={{ display: 'none' }}></div>
 
       {/* ══════════════ UNIFIED INSTITUTIONAL HEADER BAR ══════════════ */}
-      <header style={{
+      <header suppressHydrationWarning style={{
         background: '#FFFFFF',
         borderBottom: '1px solid #E8E2DC',
         position: 'sticky', top: 0, zIndex: 100,
@@ -302,25 +367,22 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         <div style={{ width: '100%', padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           
           {/* Left: Logo & Brand Title */}
-          <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <div style={{
-              width: 36, height: 36,
-              background: '#FFF1E8',
-              border: '1.5px solid #F28C52',
-              borderRadius: 8,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 2px 6px rgba(242,140,82,0.15)', flexShrink: 0
-            }}>
-              <Shield style={{ width: 20, height: 20, color: '#F28C52' }} />
-            </div>
+          <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+            <img 
+              src="/niyam ai.png" 
+              alt="NiyamAI Logo" 
+              style={{ height: 88, width: 'auto', objectFit: 'contain', flexShrink: 0 }} 
+            />
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 16, fontWeight: 800, color: '#171717', letterSpacing: '-0.01em' }}>BIS</span>
-                <span style={{ color: '#E8E2DC', fontWeight: 300 }}>|</span>
-                <span style={{ fontSize: 16, fontWeight: 700, color: '#242424' }}>Standards Intelligence</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 22, fontWeight: 900, color: '#171717', letterSpacing: '-0.02em' }}>
+                  Niyam<span style={{ color: '#F28C52' }}>AI</span>
+                </span>
+                <span style={{ color: '#CBD5E1', fontWeight: 300, fontSize: 18 }}>|</span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: '#1E293B' }}>BIS Standards Intelligence</span>
               </div>
-              <div style={{ fontSize: 10.5, color: '#686868', marginTop: 1 }}>
-                Ministry of Consumer Affairs, Food &amp; Public Distribution
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#D96B27', marginTop: 2, letterSpacing: '0.01em' }}>
+                India&apos;s Compliance Intelligence Platform
               </div>
             </div>
           </Link>
@@ -379,23 +441,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
               </select>
             </div>
 
-            {/* Accessibility Font Size */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2, borderRight: '1px solid #E8E2DC', paddingRight: 8 }}>
-              {(['small', 'normal', 'large'] as const).map((sz, i) => (
-                <button
-                  key={sz}
-                  onClick={() => setFontSize(sz)}
-                  title={`${sz} text size`}
-                  style={{
-                    background: fontSize === sz ? '#F28C52' : 'transparent',
-                    color: fontSize === sz ? '#FFFFFF' : '#686868',
-                    border: `1px solid ${fontSize === sz ? '#E9783F' : '#E8E2DC'}`,
-                    borderRadius: 4, cursor: 'pointer',
-                    padding: '2px 5px', fontSize: 10.5, fontWeight: 700,
-                  }}
-                >{['A-', 'A', 'A+'][i]}</button>
-              ))}
-            </div>
+
 
             {/* Language Selector */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -481,13 +527,13 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <div style={{ flex: 1, display: 'flex', width: '100%' }}>
         
         {/* LEFT SIDEBAR NAVIGATION */}
-        <aside style={{
+        <aside suppressHydrationWarning style={{
           width: sidebarCollapsed ? 64 : 260,
           background: '#FFFFFF',
           borderRight: '1px solid #E8E2DC',
           display: 'flex', flexDirection: 'column',
           flexShrink: 0,
-          position: 'sticky', top: 57, height: 'calc(100vh - 57px)',
+          position: 'sticky', top: 98, height: 'calc(100vh - 98px)',
           zIndex: 40,
           boxSizing: 'border-box'
         }}>
@@ -600,48 +646,6 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         }}>
           <div style={{ maxWidth: 1440, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 20 }}>
             
-            {/* Dynamic Active Role Persona Banner */}
-            <div style={{
-              background: persona === 'manufacturer' ? '#FFF1E8' :
-                          persona === 'msme' ? '#EBF4EE' :
-                          persona === 'consumer' ? '#FEF7ED' : '#F0F4FF',
-              border: `1.5px solid ${
-                persona === 'manufacturer' ? '#F4C4A5' :
-                persona === 'msme' ? '#B5D5BF' :
-                persona === 'consumer' ? '#F4D3A5' : '#B8CBEF'
-              }`,
-              borderLeft: `5px solid ${
-                persona === 'manufacturer' ? '#F28C52' :
-                persona === 'msme' ? '#4F7D5A' :
-                persona === 'consumer' ? '#C88732' : '#3B82F6'
-              }`,
-              borderRadius: 10,
-              padding: '10px 16px',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.02)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                <span style={{
-                  fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em',
-                  background: '#FFFFFF',
-                  color: persona === 'manufacturer' ? '#E9783F' :
-                         persona === 'msme' ? '#4F7D5A' :
-                         persona === 'consumer' ? '#C88732' : '#2563EB',
-                  borderRadius: 4, padding: '3px 8px', border: '1px solid #E8E2DC'
-                }}>
-                  {persona === 'manufacturer' ? '🏭 MANUFACTURER VIEW ACTIVE' :
-                   persona === 'msme' ? '🏬 MSME ENTERPRISE VIEW ACTIVE' :
-                   persona === 'consumer' ? '🛒 CONSUMER PROTECTION VIEW ACTIVE' : '🚢 IMPORTER & FMCS VIEW ACTIVE'}
-                </span>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: '#171717' }}>
-                  {persona === 'manufacturer' ? 'Factory Setup, Scheme-I ISI Mark Certification & In-House Testing Laboratory Mapping' :
-                   persona === 'msme' ? 'Concessional Fees (50% Off), Simplified Documentation & MSME Compliance Roadmap' :
-                   persona === 'consumer' ? 'Genuine ISI & Hallmark HUID Verification, Public Hazard Alerts & Consumer Safety' :
-                   'CRS Compulsory Electronics Registration, Customs Clearance & Foreign Manufacturers (FMCS)'}
-                </span>
-              </div>
-            </div>
-
             {children}
           </div>
         </main>
@@ -760,16 +764,16 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       {/* ══════════════ ANTIGRAVITY-STYLE RIGHT-SIDE AI SLIDE PANEL ══════════════ */}
       {aiPanelOpen && (
         <div style={{
-          position: 'fixed', top: 57, right: 0, bottom: 0, width: 440, maxWidth: '90vw',
-          height: 'calc(100vh - 57px)',
+          position: 'fixed', top: 98, right: 0, bottom: 0, width: 440, maxWidth: '90vw',
+          height: 'calc(100vh - 98px)',
           background: '#FFFFFF', borderLeft: '1px solid #E8E2DC', zIndex: 95,
           boxShadow: '-8px 0 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column'
         }}>
           {/* Panel Header */}
           <div style={{ padding: '16px 20px', background: '#171717', color: '#FFFFFF', borderBottom: '1px solid #27272A', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 28, height: 28, background: '#F28C52', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF' }}>
-                <Sparkles style={{ width: 16, height: 16 }} />
+              <div style={{ width: 28, height: 28, background: '#FFF1E8', border: '1px solid #F4C4A5', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                <img src="/niyam ai.png" alt="NiyamAI Logo" style={{ width: 22, height: 22, objectFit: 'contain' }} />
               </div>
               <div>
                 <div style={{ fontSize: 13.5, fontWeight: 800 }}>Ask BIS AI Assistant</div>
@@ -801,7 +805,31 @@ function ShellInner({ children }: { children: React.ReactNode }) {
                 borderRadius: 8, padding: 12, fontSize: 12.5, lineHeight: 1.55, fontWeight: 500,
                 boxShadow: msg.sender === 'bot' ? '0 1px 4px rgba(0,0,0,0.03)' : 'none'
               }}>
-                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</div>
+                <FormattedMarkdown content={msg.text} isUser={msg.sender === 'user'} />
+
+                {/* Voice Assistant Speak Control Button */}
+                {msg.sender === 'bot' && (
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      onClick={() => {
+                        if (panelSpeaking) {
+                          stopAudioPlayback();
+                          setPanelSpeaking(false);
+                        } else {
+                          speakAudioResponse(msg.text, () => setPanelSpeaking(true), () => setPanelSpeaking(false));
+                        }
+                      }}
+                      style={{
+                        background: '#FFF1E8', border: '1px solid #F4C4A5', borderRadius: 4,
+                        padding: '3px 8px', fontSize: 10.5, fontWeight: 700, color: '#E9783F',
+                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
+                      }}
+                    >
+                      {panelSpeaking ? <VolumeX style={{ width: 12, height: 12 }} /> : <Volume2 style={{ width: 12, height: 12 }} />}
+                      <span>{panelSpeaking ? 'Stop Audio' : '🔊 Listen Out Loud'}</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Source Cards */}
                 {msg.agentResponse?.sources && msg.agentResponse.sources.length > 0 && (
@@ -873,15 +901,33 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Input Form */}
-          <div style={{ padding: 12, background: '#FFFFFF', borderTop: '1px solid #E8E2DC', display: 'flex', gap: 8 }}>
+          <div style={{ padding: 12, background: '#FFFFFF', borderTop: '1px solid #E8E2DC', display: 'flex', gap: 8, alignItems: 'center' }}>
             <input
               type="text"
               value={panelInputQuery}
               onChange={(e) => setPanelInputQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendPanelMessage()}
-              placeholder="Ask anything about BIS or command the app..."
-              style={{ flex: 1, background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 6, padding: '8px 10px', fontSize: 12, fontWeight: 600, outline: 'none' }}
+              placeholder={panelListening ? "Listening... Speak your query..." : "Ask anything about BIS or command the app..."}
+              style={{
+                flex: 1,
+                background: panelListening ? '#FFF1E8' : '#FFFCF8',
+                border: `1px solid ${panelListening ? '#F28C52' : '#E8E2DC'}`,
+                borderRadius: 6, padding: '8px 10px', fontSize: 12, fontWeight: 600, outline: 'none'
+              }}
             />
+            <button
+              onClick={startPanelVoiceInput}
+              title="Speak with Voice Assistant"
+              style={{
+                background: panelListening ? '#E9783F' : '#FFFCF8',
+                color: panelListening ? '#FFFFFF' : '#F28C52',
+                border: '1px solid #F4C4A5', borderRadius: 6,
+                padding: '8px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.15s'
+              }}
+            >
+              <Mic style={{ width: 15, height: 15 }} />
+            </button>
             <button onClick={() => handleSendPanelMessage()} style={{ background: '#F28C52', color: '#FFFFFF', border: 'none', borderRadius: 6, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               Send
             </button>
@@ -896,11 +942,11 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 24, paddingBottom: 24, borderBottom: '1px solid #27272A' }}>
             {/* Identity */}
             <div style={{ gridColumn: 'span 2' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <div style={{ width: 28, height: 28, background: 'rgba(242, 140, 82, 0.15)', border: '1px solid rgba(242, 140, 82, 0.4)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Shield style={{ width: 16, height: 16, color: '#F28C52' }} />
-                </div>
-                <span style={{ fontWeight: 800, fontSize: 15, color: '#FFFFFF' }}>Bureau of Indian Standards</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8 }}>
+                <img src="/niyam ai.png" alt="NiyamAI Logo" style={{ height: 56, width: 'auto', objectFit: 'contain' }} />
+                <span style={{ fontWeight: 800, fontSize: 16, color: '#FFFFFF' }}>
+                  Niyam<span style={{ color: '#F28C52' }}>AI</span> — Standards Intelligence
+                </span>
               </div>
               <p style={{ fontSize: 12.5, color: '#A1A1AA', maxWidth: 480, margin: 0, lineHeight: 1.6 }}>
                 Groundbreaking intelligence platform providing clause-level verification, revision comparisons, and statutory compliance navigation for Indian Standards.
@@ -924,7 +970,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, fontSize: 12, color: '#71717A', flexWrap: 'wrap', gap: 10 }}>
-            <span>© 2026 Bureau of Indian Standards (BIS), Government of India.</span>
+            <span>© 2026 NiyamAI — Bureau of Indian Standards (BIS), Government of India.</span>
             <span>Designed to GOI web standards • Dark Charcoal Theme</span>
           </div>
 

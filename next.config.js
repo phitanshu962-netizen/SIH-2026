@@ -4,6 +4,9 @@ const nextConfig = {
   swcMinify: true,
   images: {
     unoptimized: true
+  },
+  experimental: {
+    serverComponentsExternalPackages: ['pdf-parse', 'pdfjs-dist']
   }
 };
 
