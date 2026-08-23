@@ -20,6 +20,8 @@ export interface BISStandard {
     clause: string;
     description: string;
   }[];
+  rawDocumentText?: string;
+  markdownContent?: string;
 }
 
 export interface GroundedCitation {

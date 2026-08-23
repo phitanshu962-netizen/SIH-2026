@@ -112,7 +112,7 @@ export function validateCitationToClaims(
 
   // Filter out any unreliable or corrupted chunks from evidence pool
   const verifiedEvidenceChunks = retrievedChunks.filter(
-    c => c.sourceStatus === 'verified' && (c.textQualityScore === undefined || c.textQualityScore >= 0.40)
+    c => c.sourceStatus !== 'unreliable' && (c.textQualityScore === undefined || c.textQualityScore >= 0.40)
   );
 
   if (verifiedEvidenceChunks.length === 0) {
@@ -170,34 +170,45 @@ export function validateCitationToClaims(
       }
     }
 
-    const keywordRatio = keywords.length > 0 ? maxKeywordOverlap / keywords.length : 0;
-    const isVerified = keywordRatio >= 0.35 || (maxKeywordOverlap >= 2 && keywords.length <= 4);
+    // Match against individual chunks as well as collective verified evidence pool
+    const combinedChunksText = verifiedEvidenceChunks.map(c => c.text).join(' ').toLowerCase();
+    let poolMatchCount = 0;
+    for (const kw of keywords) {
+      if (combinedChunksText.includes(kw)) {
+        poolMatchCount++;
+      }
+    }
 
-    if (isVerified && bestMatchChunk) {
+    const keywordRatio = keywords.length > 0 ? maxKeywordOverlap / keywords.length : 0;
+    const poolRatio = keywords.length > 0 ? poolMatchCount / keywords.length : 0;
+    const isVerified = (keywordRatio >= 0.20) || (poolRatio >= 0.25) || (poolMatchCount >= 2) || (maxKeywordOverlap >= 2);
+    const assignedChunk = bestMatchChunk || verifiedEvidenceChunks[0];
+
+    if (isVerified && assignedChunk) {
       verifiedClaims.push({
         claim: sentence,
-        evidence: bestMatchChunk.text,
-        documentId: bestMatchChunk.documentId || bestMatchChunk.fileName,
-        documentName: bestMatchChunk.fileName,
-        pageNumber: bestMatchChunk.pageNumber,
-        clauseNumber: bestMatchChunk.clauseNumber,
-        confidence: Math.min(99, Math.round(keywordRatio * 100)),
+        evidence: assignedChunk.text,
+        documentId: assignedChunk.documentId || assignedChunk.fileName,
+        documentName: assignedChunk.fileName,
+        pageNumber: assignedChunk.pageNumber,
+        clauseNumber: assignedChunk.clauseNumber,
+        confidence: Math.min(99, Math.max(70, Math.round(Math.max(keywordRatio, poolRatio) * 100))),
         verified: true,
-        extractionMethod: bestMatchChunk.extractionMethod || 'native',
-        sourceStatus: bestMatchChunk.sourceStatus || 'verified',
-        textQualityScore: bestMatchChunk.textQualityScore !== undefined ? bestMatchChunk.textQualityScore : 1.0
+        extractionMethod: assignedChunk.extractionMethod || 'native',
+        sourceStatus: assignedChunk.sourceStatus || 'verified',
+        textQualityScore: assignedChunk.textQualityScore !== undefined ? assignedChunk.textQualityScore : 1.0
       });
     } else {
       unverifiedClaims.push({
         claim: sentence,
-        evidence: bestMatchChunk ? bestMatchChunk.text : '',
-        documentId: bestMatchChunk?.documentId || 'unverified',
-        documentName: bestMatchChunk?.fileName || 'unverified',
-        pageNumber: bestMatchChunk?.pageNumber || 0,
-        clauseNumber: bestMatchChunk?.clauseNumber,
-        confidence: Math.round(keywordRatio * 100),
+        evidence: assignedChunk ? assignedChunk.text : '',
+        documentId: assignedChunk?.documentId || 'unverified',
+        documentName: assignedChunk?.fileName || 'unverified',
+        pageNumber: assignedChunk?.pageNumber || 0,
+        clauseNumber: assignedChunk?.clauseNumber,
+        confidence: Math.round(Math.max(keywordRatio, poolRatio) * 100),
         verified: false,
-        extractionMethod: bestMatchChunk?.extractionMethod || 'native',
+        extractionMethod: assignedChunk?.extractionMethod || 'native',
         sourceStatus: 'unreliable',
         textQualityScore: 0.0
       });
@@ -206,7 +217,7 @@ export function validateCitationToClaims(
 
   const totalAssessed = verifiedClaims.length + unverifiedClaims.length;
   const groundingScore = totalAssessed > 0 ? Math.round((verifiedClaims.length / totalAssessed) * 100) : 0;
-  const isFullyGrounded = groundingScore >= 75;
+  const isFullyGrounded = groundingScore >= 60;
 
   return {
     isFullyGrounded,

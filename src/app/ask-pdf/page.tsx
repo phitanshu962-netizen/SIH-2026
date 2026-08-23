@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
 import { 
   FileText, Upload, Send, Bot, User, BookOpen, CheckCircle2, 
   Sparkles, RefreshCw, ChevronRight, FileCheck, AlertTriangle, BookOpenCheck,
@@ -162,7 +163,7 @@ export default function AskPDFPage() {
       setMessages([
         {
           sender: 'bot',
-          text: `Error processing document: ${err.message || err}.`,
+          text: `Error indexing document: ${err.message || err}. Please try uploading again or verify the PDF is not password-protected.`,
           confidence: 'FAILED',
           sourceQuality: 'NONE'
         }
@@ -204,7 +205,7 @@ export default function AskPDFPage() {
     if (!customQuery) setInputQuery('');
     setIsProcessing(true);
 
-    if (!isIndexed && fileName === 'IS_302_Electric_Iron_Standard.pdf') {
+    if (!isIndexed) {
       setTimeout(() => {
         const ragResponse = queryPdfDocumentRag(textToRun, ingestionData.overview);
         setMessages(prev => [
@@ -225,8 +226,15 @@ export default function AskPDFPage() {
             safeRewrite: ragResponse.evidenceSafeRewrite
           }
         ]);
+        saveDocumentQueryToFirebase({
+          fileName,
+          query: textToRun,
+          answer: ragResponse.answerText,
+          citationsCount: ragResponse.citations?.length || 0,
+          confidence: ragResponse.confidence
+        });
         setIsProcessing(false);
-      }, 600);
+      }, 400);
       return;
     }
 
@@ -272,7 +280,7 @@ export default function AskPDFPage() {
         ...prev,
         {
           sender: 'bot',
-          text: `Error retrieving answer: ${err.message || err}.`,
+          text: `Error retrieving answer: ${err.message || err}. Grounded fallbacks are active across all Indian Standards.`,
           confidence: 'ERROR',
           sourceQuality: 'NONE'
         }
@@ -488,12 +496,12 @@ export default function AskPDFPage() {
               key={i}
               style={{
                 alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-                maxWidth: '88%',
-                background: msg.sender === 'user' ? '#F28C52' : msg.isAbstention ? '#FEF2F2' : '#FFFCF8',
+                maxWidth: msg.sender === 'user' ? '75%' : '92%',
+                background: msg.sender === 'user' ? '#F28C52' : msg.isAbstention ? '#FEF2F2' : '#FFFFFF',
                 color: msg.sender === 'user' ? '#FFFFFF' : '#171717',
                 border: msg.sender === 'user' ? 'none' : `1px solid ${msg.isAbstention ? '#FECACA' : '#E8E2DC'}`,
                 borderRadius: 10,
-                padding: 14,
+                padding: '14px 18px',
                 boxShadow: '0 1px 4px rgba(40,30,20,0.04)'
               }}
             >
@@ -505,12 +513,51 @@ export default function AskPDFPage() {
                 </div>
               )}
 
-              <div style={{ fontSize: 13, lineHeight: 1.6, fontWeight: msg.sender === 'user' ? 600 : 500, whiteSpace: 'pre-wrap' }}>
-                {msg.text}
-              </div>
+              {msg.sender === 'user' ? (
+                <div style={{ fontSize: 13.5, lineHeight: 1.5, fontWeight: 600 }}>
+                  {msg.text}
+                </div>
+              ) : (
+                <div style={{ fontSize: 13, lineHeight: 1.65, color: '#242424' }}>
+                  <ReactMarkdown
+                    components={{
+                      h1: ({ children }) => <h1 style={{ fontSize: 17, fontWeight: 800, color: '#171717', margin: '10px 0 6px' }}>{children}</h1>,
+                      h2: ({ children }) => <h2 style={{ fontSize: 15, fontWeight: 800, color: '#171717', margin: '10px 0 6px', borderBottom: '1px solid #E8E2DC', paddingBottom: 4 }}>{children}</h2>,
+                      h3: ({ children }) => <h3 style={{ fontSize: 13.5, fontWeight: 800, color: '#E9783F', margin: '10px 0 4px', display: 'flex', alignItems: 'center', gap: 4 }}>{children}</h3>,
+                      h4: ({ children }) => <h4 style={{ fontSize: 12.5, fontWeight: 700, color: '#171717', margin: '8px 0 2px' }}>{children}</h4>,
+                      p: ({ children }) => <p style={{ margin: '0 0 8px', color: '#242424' }}>{children}</p>,
+                      ul: ({ children }) => <ul style={{ margin: '4px 0 8px 18px', paddingLeft: 0, listStyleType: 'disc' }}>{children}</ul>,
+                      ol: ({ children }) => <ol style={{ margin: '4px 0 8px 18px', paddingLeft: 0, listStyleType: 'decimal' }}>{children}</ol>,
+                      li: ({ children }) => <li style={{ marginBottom: 3, color: '#2E2B29' }}>{children}</li>,
+                      blockquote: ({ children }) => (
+                        <blockquote style={{
+                          margin: '8px 0',
+                          padding: '8px 12px',
+                          background: '#FDFBF7',
+                          borderLeft: '3px solid #F28C52',
+                          borderRadius: '0 6px 6px 0',
+                          color: '#47423F',
+                          fontSize: 12.5
+                        }}>
+                          {children}
+                        </blockquote>
+                      ),
+                      code: ({ children }) => (
+                        <code style={{ background: '#F4ECE6', color: '#8C3D10', padding: '1px 5px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>
+                          {children}
+                        </code>
+                      ),
+                      strong: ({ children }) => <strong style={{ color: '#171717', fontWeight: 700 }}>{children}</strong>,
+                      hr: () => <hr style={{ border: 'none', borderTop: '1px solid #E8E2DC', margin: '12px 0' }} />
+                    }}
+                  >
+                    {msg.text}
+                  </ReactMarkdown>
+                </div>
+              )}
 
               {/* Citations with Quality Badges */}
-              {msg.citations && msg.citations.length > 0 && (
+              {msg.citations && msg.citations.length > 0 && !msg.text.includes('### 📄 Grounded Document Excerpts') && !msg.text.includes('## 📄') && (
                 <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #E8E2DC', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <span style={{ fontSize: 10.5, fontWeight: 800, color: '#E9783F', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                     Grounded Source Evidence &amp; Verification Badges:

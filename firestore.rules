@@ -2,53 +2,86 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Standards collections (official and custom ingested standards)
+    // Standards collections (official, custom ingested, deleted registry)
     match /bis_standards/{standardId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write, delete: if true;
     }
     
     match /custom_standards/{standardId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write, delete: if true;
     }
     
     match /standards/{standardId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write, delete: if true;
+    }
+
+    match /deleted_standards/{standardId} {
+      allow read, write, delete: if true;
     }
     
     // User Profiles
     match /users/{userId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write, delete: if true;
     }
     
-    // Audit and Gap Analysis Reports
+    // Audit, Evidence, and Gap Analysis Reports
     match /gap_analysis_reports/{reportId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write, delete: if true;
+    }
+    
+    match /gap_analysis_audits/{reportId} {
+      allow read, write, delete: if true;
+    }
+    
+    match /evidence_audits/{auditId} {
+      allow read, write, delete: if true;
     }
     
     match /audit_logs/{logId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write, delete: if true;
     }
     
     // Feedback and System Logs
     match /feedback_logs/{feedbackId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write, delete: if true;
     }
     
     match /document_analyses/{docId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write, delete: if true;
     }
 
-    // Default fallback
+    match /document_queries/{queryId} {
+      allow read, write, delete: if true;
+    }
+
+    match /voice_queries/{queryId} {
+      allow read, write, delete: if true;
+    }
+
+    // Checklist, Watchlist, Subscriptions, Lab Inquiries, Comparisons
+    match /checklist_progress/{standardId} {
+      allow read, write, delete: if true;
+    }
+
+    match /alert_subscriptions/{emailKey} {
+      allow read, write, delete: if true;
+    }
+
+    match /user_watchlists/{userKey} {
+      allow read, write, delete: if true;
+    }
+
+    match /lab_inquiries/{inquiryId} {
+      allow read, write, delete: if true;
+    }
+
+    match /standard_comparisons/{comparisonId} {
+      allow read, write, delete: if true;
+    }
+
+    // Default fallback - allow full access
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write, create, update, delete: if true;
     }
   }
 }

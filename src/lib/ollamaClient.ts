@@ -59,30 +59,33 @@ export async function queryOllamaLocal(prompt: string, modelName: string = 'llam
  * Queries the cloud Google Gemini API as a secondary pipeline.
  */
 export async function queryGeminiAPI(prompt: string, apiKey: string): Promise<string | null> {
-  try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: prompt }]
-        }]
-      })
-    });
-    
-    if (!response.ok) {
-      console.error('Gemini API returned status:', response.status);
-      return null;
+  const models = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-flash-lite-latest'];
+  for (const model of models) {
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }]
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text && text.trim().length > 0) {
+          return text;
+        }
+      }
+    } catch (err) {
+      console.warn(`Error querying Gemini model ${model}:`, err);
     }
-    
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
-  } catch (err) {
-    console.error('Error querying Gemini API:', err);
-    return null;
   }
+  return null;
 }
 
 /**
