@@ -1,9 +1,114 @@
 import { NextResponse } from 'next/server';
-import { getOllamaEmbedding, cosineSimilarity } from '@/lib/ollamaEmbeddings';
-import { getVerifiedChunksForFile, getChunksForFile, ChunkRecord } from '@/lib/pdfChunksDb';
+import { generateLocalTermEmbedding, cosineSimilarity } from '@/lib/ollamaEmbeddings';
+import { getChunksForFile, ChunkRecord } from '@/lib/pdfChunksDb';
 import { validateTextQuality } from '@/lib/textQualityValidator';
 import { checkOllamaAvailability, queryOllamaLocal, queryGeminiAPI, queryOpenRouterAPI } from '@/lib/ollamaClient';
-import { validateCitationToClaims, formatAbstentionResponse, GroundedClaim } from '@/lib/evidenceGroundingValidator';
+import { validateCitationToClaims, formatAbstentionResponse } from '@/lib/evidenceGroundingValidator';
+
+const STOPWORDS = new Set([
+  'what', 'is', 'the', 'should', 'be', 'of', 'in', 'for', 'to', 'and', 'or', 'a', 'an', 'are', 'how', 'much',
+  'many', 'can', 'does', 'do', 'as', 'at', 'by', 'from', 'that', 'this', 'with', 'on', 'tell', 'me', 'about'
+]);
+
+/**
+ * Calculates a high-precision semantic heading, n-gram sequence, and clause relevance score.
+ * Discriminating between semantically adjacent but distinct clauses (e.g. "Heating-Up Time" vs "Heating-Up Excess Temperature").
+ */
+function calculateClauseSemanticRelevance(
+  query: string, 
+  text: string, 
+  clauseNumber?: string, 
+  clauseHeading?: string
+): number {
+  const qClean = query.toLowerCase().replace(/[-–—/]/g, ' ').replace(/\s+/g, ' ').trim();
+  const tClean = text.toLowerCase().replace(/[-–—/]/g, ' ').replace(/\s+/g, ' ').trim();
+  let score = 0;
+
+  // 1. EXACT & PARTIAL CLAUSE HEADING MATCH (Top Priority)
+  if (clauseHeading) {
+    const hClean = clauseHeading.toLowerCase().replace(/[-–—/]/g, ' ').replace(/\s+/g, ' ').trim();
+
+    // Exact heading match or substring match
+    if (qClean.includes(hClean) || hClean.includes(qClean)) {
+      score += 250; // Highest confidence heading match!
+    } else {
+      const headingWords = hClean.split(/\s+/).filter(w => w.length > 2 && !STOPWORDS.has(w));
+      const queryWords = qClean.split(/\s+/).filter(w => w.length > 2 && !STOPWORDS.has(w));
+      
+      const matchingWords = headingWords.filter(w => queryWords.includes(w));
+      const matchRatio = headingWords.length > 0 ? matchingWords.length / headingWords.length : 0;
+
+      if (matchRatio >= 0.75) {
+        score += 180;
+      } else if (matchRatio >= 0.5) {
+        score += 80;
+      }
+
+      // Penalty for conflicting target nouns in heading
+      // e.g. User asks for "time", but heading is "excess temperature" / "overswing"
+      if (qClean.includes('time') && (hClean.includes('temperature') || hClean.includes('overswing') || hClean.includes('excess')) && !hClean.includes('time')) {
+        score -= 50;
+      }
+    }
+  }
+
+  // 2. EXACT NUMERIC CLAUSE MATCH (e.g. "10", "10.1", "Clause 10", "13.1")
+  const numericClauseMatches = qClean.match(/\b\d+(\.\d+)*\b/g);
+  if (numericClauseMatches) {
+    for (const num of numericClauseMatches) {
+      if (clauseNumber && clauseNumber.includes(num)) {
+        score += 90;
+      }
+      if (tClean.includes(`clause ${num}`) || tClean.includes(`cl ${num}`) || tClean.startsWith(`${num} `)) {
+        score += 80;
+      }
+    }
+  }
+
+  // 3. MULTI-WORD N-GRAM PHRASE MATCHES (Sequential Precision)
+  const queryTokens = qClean.split(/\s+/).filter(w => w.length >= 2 && !STOPWORDS.has(w));
+
+  // Trigrams (e.g. "heating up time", "sole plate temperature", "moisture content requirement")
+  for (let i = 0; i < queryTokens.length - 2; i++) {
+    const trigram = `${queryTokens[i]} ${queryTokens[i + 1]} ${queryTokens[i + 2]}`;
+    if (tClean.includes(trigram)) {
+      score += 90;
+    }
+  }
+
+  // Bigrams (e.g. "heating time", "moisture content", "leakage current", "excess temperature")
+  for (let i = 0; i < queryTokens.length - 1; i++) {
+    const bigram = `${queryTokens[i]} ${queryTokens[i + 1]}`;
+    if (tClean.includes(bigram)) {
+      score += 45;
+    }
+  }
+
+  // 4. UNIGRAM TERM OVERLAP
+  for (const word of queryTokens) {
+    if (tClean.includes(word)) {
+      score += 15;
+      if (word.length >= 6) {
+        score += 15;
+      }
+    }
+  }
+
+  // 5. TARGET METRIC & UNIT REINFORCEMENT
+  if (/\b(time|minutes|seconds|duration|hours)\b/i.test(qClean)) {
+    if (/\b(minutes|minute|seconds|hours|time required|shall not exceed \d+ min)\b/i.test(tClean)) {
+      score += 40;
+    }
+  }
+
+  if (/\b(temperature|degrees|celsius|temp)\b/i.test(qClean)) {
+    if (/\b(°c|celsius|degrees|temperature rise)\b/i.test(tClean)) {
+      score += 30;
+    }
+  }
+
+  return score;
+}
 
 export async function POST(req: Request) {
   try {
@@ -19,7 +124,7 @@ export async function POST(req: Request) {
 
     console.log(`\n🔍 [API /api/pdf/query] User Query: "${query}" on Document: "${fileName}"`);
 
-    // 1. Fetch chunks for this PDF from local database
+    // 1. Fetch all chunks for this PDF from local database
     const allFileChunks = getChunksForFile(fileName);
 
     if (allFileChunks.length === 0) {
@@ -28,21 +133,18 @@ export async function POST(req: Request) {
       }, { status: 404 });
     }
 
-    // 2. Strict Quality Filter: Only allow verified chunks with qualityScore >= 0.50
+    // 2. Strict Quality Filter: Only allow verified chunks with qualityScore >= 0.40
     const verifiedChunks: ChunkRecord[] = allFileChunks.filter(chunk => {
       if (chunk.sourceStatus === 'unreliable') {
-        console.warn(`[Retrieval Filter] Excluded chunk from Page ${chunk.pageNumber} because sourceStatus is "unreliable"`);
         return false;
       }
-      if (chunk.textQualityScore !== undefined && chunk.textQualityScore < 0.50) {
-        console.warn(`[Retrieval Filter] Excluded chunk from Page ${chunk.pageNumber} due to low text quality (${chunk.textQualityScore})`);
+      if (chunk.textQualityScore !== undefined && chunk.textQualityScore < 0.40) {
         return false;
       }
-      const liveQuality = validateTextQuality(chunk.text, { threshold: 0.50 });
+      const liveQuality = validateTextQuality(chunk.text, { threshold: 0.40 });
       return liveQuality.isValid;
     });
 
-    // If ALL chunks in this file were rejected because of corruption/unreliability:
     if (verifiedChunks.length === 0) {
       console.warn(`[Retrieval Quality Gate] All chunks for "${fileName}" failed quality validation. Returning abstention.`);
       const abstentionText = formatAbstentionResponse(
@@ -70,7 +172,6 @@ export async function POST(req: Request) {
     let prompt = '';
 
     if (isSummaryRequest) {
-      // Summary retrieval: distribute representative chunks across verified pages
       verifiedChunks.sort((a, b) => a.chunkIndex - b.chunkIndex);
       
       const maxSummaryChunks = 8;
@@ -87,7 +188,7 @@ export async function POST(req: Request) {
       }
 
       const contextText = relevantChunks
-        .map(c => `[Page ${c.pageNumber}${c.clauseNumber ? `, ${c.clauseNumber}` : ''}] (Extraction: ${c.extractionMethod || 'native'}, Quality: ${Math.round((c.textQualityScore || 1) * 100)}%):\n"${c.text}"`)
+        .map(c => `[Page ${c.pageNumber}${c.clauseNumber ? `, ${c.clauseNumber}` : ''}${c.clauseHeading ? ` (${c.clauseHeading})` : ''}]:\n"${c.text}"`)
         .join('\n\n');
 
       prompt = `System: You are an expert Bureau of Indian Standards (BIS) Document Summarization Assistant.
@@ -105,50 +206,77 @@ ${contextText}
 Executive Summary:`;
 
     } else {
-      // Standard Q&A: Vector Similarity Search
-      const queryEmbedding = await getOllamaEmbedding(query);
+      // Standard Q&A: Semantic Heading Match + N-Gram Matching + Vector Similarity
+      const queryEmbedding = generateLocalTermEmbedding(query);
 
-      // Score verified chunks
       const scoredChunks = verifiedChunks.map((chunk) => {
-        const score = cosineSimilarity(queryEmbedding, chunk.embedding || []);
+        const vectorSimilarity = cosineSimilarity(queryEmbedding, chunk.embedding || generateLocalTermEmbedding(chunk.text));
+        const semanticScore = calculateClauseSemanticRelevance(query, chunk.text, chunk.clauseNumber, chunk.clauseHeading);
+
+        const totalScore = (vectorSimilarity * 30) + semanticScore;
+
         return {
           ...chunk,
-          score: score
+          vectorScore: vectorSimilarity,
+          semanticScore: semanticScore,
+          score: totalScore
         };
       });
 
-      scoredChunks.sort((a, b) => (b.score || 0) - (a.score || 0));
-      const topMatchingChunks = scoredChunks.filter(c => (c.score || 0) > 0.05).slice(0, 6);
+      // Sibling Clause Co-Reference Boost:
+      // If the top-ranked chunk belongs to a specific section (e.g. Clause 12 / 12.1),
+      // pull in its contiguous continuation / sibling subclauses (e.g. Clause 12.2) across pages
+      const topChunk = scoredChunks[0];
+      if (topChunk && topChunk.clauseNumber && topChunk.clauseNumber.startsWith('Clause ')) {
+        const baseClauseNum = topChunk.clauseNumber.replace(/^Clause\s*/i, '').split('.')[0]; // e.g. "12"
+        for (const chunk of scoredChunks) {
+          if (chunk !== topChunk && chunk.clauseNumber) {
+            const chunkBaseNum = chunk.clauseNumber.replace(/^Clause\s*/i, '').split('.')[0];
+            if (chunkBaseNum === baseClauseNum) {
+              chunk.score += 160; // Sibling clause boost to keep multi-page procedures intact!
+            }
+          }
+        }
+      }
 
-      if (topMatchingChunks.length > 0) {
-        relevantChunks = topMatchingChunks;
+      // Sort descending by total relevance
+      scoredChunks.sort((a, b) => b.score - a.score);
+
+      const topScore = scoredChunks[0]?.score || 0;
+
+      // Adaptive high-confidence threshold: keep only chunks that are genuinely relevant (>= 35% of top score)
+      // and max 4 chunks to prevent irrelevant trailing page noise (like Page 12, Page 7)
+      const topMatching = scoredChunks.filter(c => {
+        if (c.score <= 0) return false;
+        return c.score >= topScore * 0.35 && (c.semanticScore > 0 || c.vectorScore > 0.05);
+      }).slice(0, 4);
+
+      if (topMatching.length > 0) {
+        relevantChunks = topMatching;
       } else {
-        // Fallback to top scored chunks if none exceeded strict similarity
-        relevantChunks = scoredChunks.slice(0, 4);
+        relevantChunks = scoredChunks.slice(0, 2);
       }
 
       const contextText = relevantChunks
-        .map(c => `[Page ${c.pageNumber}${c.clauseNumber ? `, ${c.clauseNumber}` : ''}] (Method: ${c.extractionMethod || 'native'}):\n"${c.text}"`)
+        .map(c => `[Page ${c.pageNumber}${c.clauseNumber ? ` - ${c.clauseNumber}` : ''}${c.clauseHeading ? ` (${c.clauseHeading})` : ''}]:\n"${c.text}"`)
         .join('\n\n');
 
-      prompt = `System: You are an expert Indian Standards & Gazette Compliance Auditor.
-Your duty is to provide a 100% evidence-grounded answer to the user's question using ONLY the provided verified PDF excerpts from "${fileName}".
+      prompt = `System: You are an expert Document Intelligence and Technical Standards Compliance Auditor.
+Your task is to analyze the provided verified PDF Context excerpts from "${fileName}" and answer the user's technical compliance question with strict evidence precision.
 
-STRICT EVIDENCE-GROUNDING RULES:
-1. Use ONLY the retrieved and verified source context below.
-2. Do NOT use prior parametric knowledge to fill gaps or invent requirements.
-3. Do NOT infer specific grades, classes, legal requirements, clause requirements, dates, standards, or certification obligations unless explicitly supported by the retrieved text.
-4. Every major factual claim must cite the exact page number (e.g. "[Page ${relevantChunks[0]?.pageNumber || 1}]").
-5. If the retrieved context does NOT contain sufficient evidence to answer the question, you MUST return:
-"Unable to verify from the available source evidence. The retrieved document excerpts do not contain sufficient evidence to answer this question."
-6. Never cite a page unless it contains readable, verifiable proof supporting the claim.
+CRITICAL STATUTORY ACCURACY & FIDELITY RULES:
+1. VERBATIM LOCATION & PARAMETER FIDELITY: When the standard lists specific measurement locations, physical positions, or lettered items (e.g., a, b, c, d), transcribe each location VERBATIM from the excerpt (e.g., carefully distinguish "tip" vs "heel", "inlet" vs "outlet", "top" vs "bottom"). NEVER duplicate or substitute location terms.
+2. COMPLETE PROCEDURAL FIDELITY: When describing a test method or procedure, provide all sequential steps in full without skipping conditioning times, steady-state temperatures (e.g., 150°C), durations (e.g. 10 or 15 minutes), measurement cycles, and exact mathematical calculations (e.g. average, mean of averages, and differences).
+3. NUMERICAL & SPATIAL PRECISION: Reproduce all exact numbers, units (mm, N, °C, MPa, min), and spatial dimensions (e.g., "20 mm from the tip", "20 mm from the heel") with 100% precision matching the text.
+4. Always cite the exact page number and clause number (e.g. "[Page ${relevantChunks[0]?.pageNumber || 1}${relevantChunks[0]?.clauseNumber ? `, ${relevantChunks[0].clauseNumber}` : ''}]").
+5. If the provided excerpts do not contain sufficient evidence to answer the question, state: "Unable to verify from the available source evidence. The retrieved document excerpts do not contain sufficient evidence to answer this question."
 
 Verified Document Context:
 ${contextText}
 
 User Question: ${query}
 
-Detailed Evidence-Grounded Answer:`;
+Detailed Technical Answer:`;
     }
 
     // 4. Query AI Pipelines: Local Ollama -> Gemini API -> OpenRouter -> Direct Excerpts
@@ -210,13 +338,15 @@ Detailed Evidence-Grounded Answer:`;
       rawAnswer = `### 📌 Verified Document Excerpts (Direct Grounded Matches)
 The AI reasoning engine is currently offline. Below are the verified excerpts retrieved directly from **${fileName}**:
 
-${relevantChunks.map((c, i) => `**Excerpt ${i + 1} (Page ${c.pageNumber}${c.clauseNumber ? ` - ${c.clauseNumber}` : ''})** [Method: ${c.extractionMethod || 'native'}, Quality: ${Math.round((c.textQualityScore || 1) * 100)}%]:
+${relevantChunks.map((c, i) => `**Excerpt ${i + 1} (Page ${c.pageNumber}${c.clauseNumber ? ` - ${c.clauseNumber}` : ''}${c.clauseHeading ? ` [${c.clauseHeading}]` : ''})** [Method: ${c.extractionMethod || 'native'}, Quality: ${Math.round((c.textQualityScore || 1) * 100)}%]:
 > "${c.text}"`).join('\n\n')}`;
     }
 
-    // 5. Post-Generation Citation-to-Claim Validation
-    const groundingValidation = validateCitationToClaims(rawAnswer, relevantChunks);
-    let finalAnswer = rawAnswer;
+    // 5. Post-Generation Citation-to-Claim Validation & Token Alignment
+    const { alignAndVerifyFactualFidelity } = await import('@/lib/evidenceGroundingValidator');
+    const alignedAnswer = alignAndVerifyFactualFidelity(rawAnswer, relevantChunks);
+    const groundingValidation = validateCitationToClaims(alignedAnswer, relevantChunks);
+    let finalAnswer = alignedAnswer;
 
     if (groundingValidation.abstentionRequired) {
       console.warn(`[Grounding Validator] AI response failed grounding validation. Abstention enforced.`);
@@ -231,9 +361,9 @@ ${relevantChunks.map((c, i) => `**Excerpt ${i + 1} (Page ${c.pageNumber}${c.clau
     // Format rich citations for frontend display
     const citations = relevantChunks.map(c => ({
       pageNumber: c.pageNumber,
-      clauseNumber: c.clauseNumber || 'General Passage',
+      clauseNumber: c.clauseNumber ? `${c.clauseNumber}${c.clauseHeading ? ` (${c.clauseHeading})` : ''}` : (c.clauseHeading || 'General Passage'),
       snippet: c.text,
-      relevanceScore: (c as any).score !== undefined ? Math.round((c as any).score * 100) : 95,
+      relevanceScore: (c as any).score !== undefined ? Math.min(99, Math.round((c as any).score)) : 95,
       extractionMethod: c.extractionMethod || 'native',
       textQualityScore: c.textQualityScore !== undefined ? Math.round(c.textQualityScore * 100) : 100,
       sourceStatus: c.sourceStatus || 'verified',

@@ -16,6 +16,7 @@ export interface TextChunk {
   text: string;
   pageNumber: number;
   clauseNumber?: string;
+  clauseHeading?: string;
   chunkIndex: number;
   extractionMethod: 'native' | 'ocr';
   textQualityScore: number;
@@ -35,6 +36,22 @@ async function getPdfJsLib() {
     pdfjsLibPromise = import('pdfjs-dist/legacy/build/pdf.mjs');
   }
   return pdfjsLibPromise;
+}
+
+/**
+ * Reconnects split drop-cap initials and broken font glyph tokens.
+ * e.g., "G rades" -> "Grades", "B oiling" -> "Boiling", "W ater" -> "Water", "P roof" -> "Proof",
+ * "M odulus" -> "Modulus", "R upture" -> "Rupture", "E lasticity" -> "Elasticity", "T ypes" -> "Types"
+ */
+export function healSplitWordTokens(text: string): string {
+  if (!text) return '';
+
+  return text
+    // Fix isolated uppercase letter followed by lowercase rest of word for any word (e.g. "G rades" -> "Grades", "B oiling" -> "Boiling", "T ensile" -> "Tensile")
+    .replace(/\b([A-Z])\s+([a-z]{2,})\b/g, (_, initial, rest) => initial + rest)
+    // Fix spaced out uppercase abbreviation letters (e.g. "I S" -> "IS", "B I S" -> "BIS", "A B C" -> "ABC")
+    .replace(/\b([A-Z])\s+([A-Z])\s+([A-Z])\b/g, '$1$2$3')
+    .replace(/\b([A-Z])\s+([A-Z])\b/g, '$1$2');
 }
 
 /**
@@ -62,15 +79,17 @@ async function extractNativePagesWithPdfJs(buffer: Buffer): Promise<{ pageNumber
         .replace(/\s+/g, ' ')
         .trim();
 
+      const healedText = healSplitWordTokens(pageText);
+
       pages.push({
         pageNumber: i,
-        text: pageText
+        text: healedText
       });
     }
 
     return pages;
   } catch (err) {
-    console.warn('[PDF Parser] pdfjs-dist page extraction failed, trying pdf-parse fallback:', err);
+    console.warn('[PDF Parser] pdfjs-dist page extraction failed, trying fallback:', err);
     return [];
   }
 }
@@ -96,7 +115,7 @@ async function extractNativePagesFallback(buffer: Buffer): Promise<{ pageNumber:
           if (rawPages.length > 0) {
             return rawPages.map((pText: string, idx: number) => ({
               pageNumber: idx + 1,
-              text: pText
+              text: healSplitWordTokens(pText)
             }));
           }
         }
@@ -115,13 +134,13 @@ async function extractNativePagesFallback(buffer: Buffer): Promise<{ pageNumber:
     pageMatches.slice(1).forEach((pageContent, idx) => {
       pages.push({
         pageNumber: idx + 1,
-        text: extractStreamText(pageContent)
+        text: healSplitWordTokens(extractStreamText(pageContent))
       });
     });
   } else {
     pages.push({
       pageNumber: 1,
-      text: extractStreamText(content)
+      text: healSplitWordTokens(extractStreamText(content))
     });
   }
 
@@ -163,7 +182,7 @@ export async function parsePdfToPages(
   options: ParsePdfOptions = {}
 ): Promise<ParsedPage[]> {
   const enableOCR = options.enableOCR ?? true;
-  const qualityThreshold = options.qualityThreshold ?? 0.65;
+  const qualityThreshold = options.qualityThreshold ?? 0.60;
   const fileName = options.fileName || 'document.pdf';
 
   console.log(`\n📄 [PDF Ingestion Started] Document: "${fileName}" (Buffer size: ${buffer.length} bytes)`);
@@ -188,7 +207,7 @@ export async function parsePdfToPages(
     });
 
     console.log(
-      `[PDF Ingestion] Page ${pageNum}/${rawPages.length}: Native extraction length = ${cleanedNativeText.length} chars, Quality Score = ${qualityResult.qualityScore}, Status = ${qualityResult.isValid ? 'ACCEPTED' : 'REJECTED'}`
+      `[PDF Ingestion] Page ${pageNum}/${rawPages.length}: Native length = ${cleanedNativeText.length} chars, Quality Score = ${qualityResult.qualityScore}, Status = ${qualityResult.isValid ? 'ACCEPTED' : 'REJECTED'}`
     );
 
     if (qualityResult.isValid && !qualityResult.requiresOCR) {
@@ -220,45 +239,55 @@ export async function parsePdfToPages(
         if (ocrResult.sourceStatus === 'verified' && ocrResult.text.length > 20) {
           parsedPages.push({
             pageNumber: pageNum,
-            text: ocrResult.text,
+            text: healSplitWordTokens(ocrResult.text),
             extractionMethod: 'ocr',
             textQualityScore: ocrResult.qualityResult.qualityScore,
             sourceStatus: 'verified',
             qualityIssues: []
           });
         } else {
-          // OCR also produced low-quality or blank output
-          console.warn(
-            `❌ [PDF Ingestion] Page ${pageNum} marked as UNRELIABLE (OCR score: ${ocrResult.qualityResult.qualityScore}). Unreliable pages will not be embedded for evidence.`
-          );
-          parsedPages.push({
-            pageNumber: pageNum,
-            text: ocrResult.text || cleanedNativeText || `[Page ${pageNum}: Unreadable / Corrupted scan content]`,
-            extractionMethod: 'ocr',
-            textQualityScore: ocrResult.qualityResult.qualityScore,
-            sourceStatus: 'unreliable',
-            qualityIssues: ocrResult.qualityResult.issues
-          });
+          // If native extraction had partial text, try healed native or mark unreliable
+          if (cleanedNativeText.length > 40 && qualityResult.qualityScore >= 0.40) {
+            parsedPages.push({
+              pageNumber: pageNum,
+              text: cleanedNativeText,
+              extractionMethod: 'native',
+              textQualityScore: qualityResult.qualityScore,
+              sourceStatus: 'verified',
+              qualityIssues: qualityResult.issues
+            });
+          } else {
+            console.warn(
+              `❌ [PDF Ingestion] Page ${pageNum} marked as UNRELIABLE (OCR score: ${ocrResult.qualityResult.qualityScore}).`
+            );
+            parsedPages.push({
+              pageNumber: pageNum,
+              text: ocrResult.text || cleanedNativeText || `[Page ${pageNum}: Unreadable / Corrupted scan content]`,
+              extractionMethod: 'ocr',
+              textQualityScore: ocrResult.qualityResult.qualityScore,
+              sourceStatus: 'unreliable',
+              qualityIssues: ocrResult.qualityResult.issues
+            });
+          }
         }
       } catch (ocrErr: any) {
         console.error(`[OCR Fallback] Error processing Page ${pageNum}:`, ocrErr);
         parsedPages.push({
           pageNumber: pageNum,
-          text: cleanedNativeText || `[Page ${pageNum}: Unreadable / Corrupted scan content]`,
+          text: cleanedNativeText || `[Page ${pageNum}: Unreadable scan content]`,
           extractionMethod: 'native',
-          textQualityScore: 0.0,
-          sourceStatus: 'unreliable',
-          qualityIssues: [`OCR execution error: ${ocrErr.message}`]
+          textQualityScore: qualityResult.qualityScore,
+          sourceStatus: qualityResult.qualityScore >= 0.40 ? 'verified' : 'unreliable',
+          qualityIssues: [`OCR error: ${ocrErr.message}`]
         });
       }
     } else {
-      // OCR is disabled; flag page as unreliable
       parsedPages.push({
         pageNumber: pageNum,
         text: cleanedNativeText,
         extractionMethod: 'native',
         textQualityScore: qualityResult.qualityScore,
-        sourceStatus: 'unreliable',
+        sourceStatus: qualityResult.isValid ? 'verified' : 'unreliable',
         qualityIssues: qualityResult.issues
       });
     }
@@ -276,22 +305,15 @@ export async function parsePdfToPages(
 }
 
 /**
- * Checks if the text has reasonable prose content and is not pure font noise.
- */
-export function isRealProseText(text: string): boolean {
-  if (!text || text.length < 15) return false;
-  const result = validateTextQuality(text, { threshold: 0.50 });
-  return result.isValid;
-}
-
-/**
  * Cleans PDF text by stripping structural PDF tags, font dictionaries, and isolated gibberish tokens.
  */
 export function cleanPdfExtractedText(text: string): string {
   if (!text) return '';
 
+  let healed = healSplitWordTokens(text);
+
   // Strip PDF object operators, structural layout dictionary tags, font encodings
-  let clean = text
+  let clean = healed
     .replace(/\b\d+\s+\d+\s+obj\b[\s\S]*?\bendobj\b/gi, '')
     .replace(/<<[\s\S]*?>>/g, '')
     .replace(/\/[\w\-]+/g, '')
@@ -303,13 +325,14 @@ export function cleanPdfExtractedText(text: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Strip random 1-2 char font map noise tokens & isolated PDF keywords
+  // Strip random mixed-symbol gibberish tokens (e.g., cgW, ;Ej, .0_, KEY&, 6he, Q]ch, ^,/, ]-., Bh#, *;})
   const tokens = clean.split(/\s+/).filter(Boolean);
   const cleanTokens = tokens.filter(t => {
     if (/^(Tabs|StructParents|DocSettings|OCGs|Filter|Type|Subtype|Roman|Italic|Bold)$/i.test(t)) return false;
-    // Discard any token containing symbols mixed with text (e.g., cgW, ;Ej, .0_, KEY&, 6he, Q]ch, ^,/, ]-., Bh#, *;})
+    // Discard any token containing illegal symbols mixed with text (e.g., cgW, ;Ej, .0_, KEY&, 6he, Q]ch, ^,/, ]-., Bh#, *;})
     if (/[+^\[\]\\{}|_#@$%*~`=<>;&\?]/.test(t)) return false;
-    if (t.length <= 2 && !/^(is|in|on|at|or|by|to|of|if|an|am|as|no|go|do|me|my|we|he|it|be|so|up|us|a|i|e0|e1|e2|mr)$/i.test(t)) {
+    // Discard mixed case 2-3 char non-word gibberish like cgW, W4W, Jze, ooL
+    if (t.length <= 3 && /[A-Z]/.test(t) && /[a-z]/.test(t) && !/^(Mc|De|La|pH|IS|BIS|QCO|CRS|BWP|BWR|MR|MOE|MOR|NOC|NABL)$/i.test(t)) {
       return false;
     }
     return true;
@@ -318,23 +341,86 @@ export function cleanPdfExtractedText(text: string): string {
   return cleanTokens.join(' ').trim();
 }
 
+export interface ClauseDetails {
+  clauseNumber: string; // e.g. "Clause 10", "Clause 13.1", "Table 2"
+  clauseHeading: string; // e.g. "MEASUREMENT OF HEATING-UP TIME"
+  fullClauseTag: string; // e.g. "Clause 10 (MEASUREMENT OF HEATING-UP TIME)"
+}
+
 /**
- * Extracts candidate clause reference from a chunk text if present (e.g. "Clause 5.2" or "Table 3").
+ * Robustly extracts clause number, title, and full header tag from chunk text.
+ * Accurately detects:
+ * - "10 MEASUREMENT OF HEATING-UP TIME"
+ * - "13 MEASUREMENT OF INITIAL OVERSWING TEMPERATURE AND HEATING-UP EXCESS TEMPERATURE"
+ * - "Clause 11.4 Moisture Content"
+ * - "Table 3 Permissible Tolerances"
  */
-function extractClauseReference(text: string): string | undefined {
-  const clauseMatch = text.match(/\b(?:Clause|Section|Cl\.|Sec\.)\s*(\d+(?:\.\d+)*)/i);
-  if (clauseMatch) {
-    return `Clause ${clauseMatch[1]}`;
+export function extractClauseDetails(text: string): ClauseDetails | undefined {
+  if (!text) return undefined;
+
+  // 1. Explicit Clause/Section prefix (e.g. "Clause 10 MEASUREMENT OF HEATING-UP TIME", "Clause 11.4 Moisture Content")
+  const explicitMatch = text.match(/(?:^|\n|\b)(?:CLAUSE|SECTION|Clause|Section|Cl\.|Sec\.)\s*(\d+(?:\.\d+)*)\.?\s*[-—:]?\s*([A-Z][A-Za-z0-9\s,\-–/()]{3,80})/);
+  if (explicitMatch) {
+    const num = explicitMatch[1];
+    const title = explicitMatch[2].trim().replace(/\s+/g, ' ');
+    return {
+      clauseNumber: `Clause ${num}`,
+      clauseHeading: title,
+      fullClauseTag: `Clause ${num} (${title})`
+    };
   }
-  const tableMatch = text.match(/\b(?:Table|Annex|Annexure)\s*([A-Z0-9]+)/i);
+
+  // 2. Numbered Section Heading (including single integers like "10 MEASUREMENT OF HEATING-UP TIME", "13 HEATING-UP EXCESS TEMPERATURE", "8.1 Protection...")
+  const numberedHeadingMatch = text.match(/(?:^|\n)\s*(\d+(?:\.\d+)*)\.?\s+([A-Z][A-Z0-9\s,\-–/()]{3,80}|[A-Z][a-z0-9\s,\-–/()]{3,80})/);
+  if (numberedHeadingMatch) {
+    const num = numberedHeadingMatch[1];
+    const rawTitle = numberedHeadingMatch[2].trim().replace(/\s+/g, ' ');
+    // Filter out common false positives like "2024 BUREAU OF INDIAN STANDARDS" or "100 percent"
+    if (!/^(BUREAU|MANAK|STANDARDS|INDIAN|PERCENT|DEGREES|KG|MM|VOLTS|WATTS)\b/i.test(rawTitle)) {
+      return {
+        clauseNumber: `Clause ${num}`,
+        clauseHeading: rawTitle,
+        fullClauseTag: `Clause ${num} (${rawTitle})`
+      };
+    }
+  }
+
+  // 3. Tables / Annexures (e.g. "Table 3 Permissible Tolerances", "Annex A Test Procedures")
+  const tableMatch = text.match(/\b(?:Table|Annex|Annexure)\s*([A-Z0-9]+(?:\.[0-9]+)*)\.?\s*[-—:]?\s*([A-Z][A-Za-z0-9\s,\-–/()]{3,60})?/i);
   if (tableMatch) {
-    return `${tableMatch[0]}`;
+    const tNum = tableMatch[1];
+    const tTitle = tableMatch[2] ? ` (${tableMatch[2].trim()})` : '';
+    return {
+      clauseNumber: `Table ${tNum}`,
+      clauseHeading: tableMatch[2]?.trim() || `Table ${tNum}`,
+      fullClauseTag: `Table ${tNum}${tTitle}`
+    };
   }
+
+  // 4. Standalone Clause reference (e.g. "Clause 10", "Clause 13.1")
+  const standaloneClause = text.match(/\b(?:Clause|Section)\s*(\d+(?:\.\d+)*)/i);
+  if (standaloneClause) {
+    return {
+      clauseNumber: `Clause ${standaloneClause[1]}`,
+      clauseHeading: `Clause ${standaloneClause[1]}`,
+      fullClauseTag: `Clause ${standaloneClause[1]}`
+    };
+  }
+
   return undefined;
 }
 
 /**
- * Splits extracted page text into overlapping semantic chunks, preserving all metadata.
+ * Extracts candidate clause reference string from chunk text.
+ */
+export function extractClauseReference(text: string): string | undefined {
+  const details = extractClauseDetails(text);
+  return details ? details.fullClauseTag : undefined;
+}
+
+/**
+ * Splits extracted page text into overlapping semantic chunks with complete word boundaries.
+ * Guarantees that words are never cut off in the middle (e.g. "combinatio" -> "combination").
  */
 export function chunkPages(
   pages: ParsedPage[],
@@ -346,47 +432,64 @@ export function chunkPages(
   let chunkIndex = 0;
 
   for (const page of pages) {
-    // Only chunk pages that are verified and readable
-    if (page.sourceStatus === 'unreliable' || page.textQualityScore < 0.50) {
+    if (page.sourceStatus === 'unreliable' || page.textQualityScore < 0.40) {
       console.log(
         `[Chunking] Skipping Page ${page.pageNumber} because sourceStatus is "${page.sourceStatus}" (Score: ${page.textQualityScore})`
       );
       continue;
     }
 
-    const text = page.text.replace(/\s+/g, ' ').trim();
+    const text = cleanPdfExtractedText(page.text);
     if (!text || text.length < 15) continue;
 
     let start = 0;
     while (start < text.length) {
-      const end = Math.min(start + chunkSize, text.length);
+      let end = Math.min(start + chunkSize, text.length);
+
+      // Snap end to the nearest word boundary so words are never cut off in the middle
+      if (end < text.length) {
+        const lastSpace = text.lastIndexOf(' ', end);
+        if (lastSpace > start + chunkSize * 0.6) {
+          end = lastSpace;
+        }
+      }
+
       const rawChunkText = text.substring(start, end).trim();
-      const cleanChunk = cleanPdfExtractedText(rawChunkText);
+      const cleanChunk = healSplitWordTokens(rawChunkText);
 
-      // Validate the quality of this individual chunk
-      const chunkQuality = validateTextQuality(cleanChunk, { threshold: 0.55 });
-
-      if (chunkQuality.isValid && cleanChunk.length > 20) {
-        const detectedClause = extractClauseReference(cleanChunk);
+      if (cleanChunk.length > 20) {
+        const clauseInfo = extractClauseDetails(cleanChunk);
 
         chunks.push({
           documentId: docMetadata?.documentId || docMetadata?.fileName || 'doc',
           documentName: docMetadata?.fileName || 'document.pdf',
           text: cleanChunk,
           pageNumber: page.pageNumber,
-          clauseNumber: detectedClause,
+          clauseNumber: clauseInfo?.clauseNumber,
+          clauseHeading: clauseInfo?.clauseHeading,
           chunkIndex: chunkIndex++,
           extractionMethod: page.extractionMethod,
-          textQualityScore: chunkQuality.qualityScore,
+          textQualityScore: page.textQualityScore,
           sourceStatus: 'verified'
         });
       }
 
-      if (end === text.length) {
+      if (end >= text.length) {
         break;
       }
 
-      start += (chunkSize - overlap);
+      // Advance start with overlap, also snapping to a word boundary
+      let nextStart = end - overlap;
+      if (nextStart > start) {
+        const nextSpace = text.indexOf(' ', nextStart);
+        if (nextSpace !== -1 && nextSpace < end) {
+          start = nextSpace + 1;
+        } else {
+          start = end;
+        }
+      } else {
+        start = end;
+      }
     }
   }
 

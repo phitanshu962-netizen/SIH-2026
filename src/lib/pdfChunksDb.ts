@@ -10,6 +10,7 @@ export interface ChunkRecord {
   text: string;
   pageNumber: number;
   clauseNumber?: string;
+  clauseHeading?: string;
   chunkIndex: number;
   extractionMethod?: 'native' | 'ocr';
   textQualityScore?: number;
