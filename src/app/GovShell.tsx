@@ -318,7 +318,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       priorityOrder = ['DASHBOARD', 'MONITORING', 'COMPLIANCE', 'ANALYSIS', 'STANDARDS', 'KNOWLEDGE', 'TOOLS & LABS'];
     }
 
-    return priorityOrder.map(title => baseSections.find(s => s.title === title)!);
+    return priorityOrder
+      .map(title => baseSections.find(s => s.title === title))
+      .filter((s): s is (typeof baseSections)[0] => Boolean(s));
   };
 
   const navSections = getPersonaNavSections(persona);

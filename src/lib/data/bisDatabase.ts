@@ -646,20 +646,6 @@ let dynamicStandardsStore: BISStandard[] = [
 ];
 
 export function getDynamicStandards(): BISStandard[] {
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('bis_dynamic_standards');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          dynamicStandardsStore = parsed;
-          return dynamicStandardsStore;
-        }
-      }
-    } catch (e) {
-      console.warn("Could not read bis_dynamic_standards from localStorage", e);
-    }
-  }
   return dynamicStandardsStore;
 }
 

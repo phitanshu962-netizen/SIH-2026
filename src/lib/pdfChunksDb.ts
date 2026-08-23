@@ -1,11 +1,19 @@
 import fs from 'fs';
 import path from 'path';
+import { validateTextQuality } from './textQualityValidator';
 
 export interface ChunkRecord {
+  id?: string;
   fileName: string;
+  documentId?: string;
+  documentName?: string;
   text: string;
   pageNumber: number;
+  clauseNumber?: string;
   chunkIndex: number;
+  extractionMethod?: 'native' | 'ocr';
+  textQualityScore?: number;
+  sourceStatus?: 'verified' | 'unreliable';
   embedding: number[];
   createdAt: string;
 }
@@ -48,6 +56,11 @@ export function addChunksForFile(fileName: string, newChunks: Omit<ChunkRecord, 
   
   const createdChunks: ChunkRecord[] = newChunks.map(c => ({
     ...c,
+    documentId: c.documentId || fileName,
+    documentName: c.documentName || fileName,
+    extractionMethod: c.extractionMethod || 'native',
+    textQualityScore: c.textQualityScore !== undefined ? c.textQualityScore : 1.0,
+    sourceStatus: c.sourceStatus || 'verified',
     createdAt: new Date().toISOString()
   }));
   
@@ -61,4 +74,22 @@ export function addChunksForFile(fileName: string, newChunks: Omit<ChunkRecord, 
 export function getChunksForFile(fileName: string): ChunkRecord[] {
   const allChunks = loadChunks();
   return allChunks.filter(c => c.fileName === fileName);
+}
+
+/**
+ * Retrieves only verified, readable chunks for a specific file.
+ */
+export function getVerifiedChunksForFile(fileName: string): ChunkRecord[] {
+  const chunks = getChunksForFile(fileName);
+  return chunks.filter(c => {
+    // 1. Explicit status check
+    if (c.sourceStatus === 'unreliable') return false;
+    
+    // 2. Quality score check
+    if (c.textQualityScore !== undefined && c.textQualityScore < 0.50) return false;
+    
+    // 3. Fallback on-the-fly quality validation to catch un-migrated legacy chunks
+    const quality = validateTextQuality(c.text, { threshold: 0.50 });
+    return quality.isValid;
+  });
 }

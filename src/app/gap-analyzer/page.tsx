@@ -17,7 +17,7 @@ export default function GapAnalyzerPage() {
   const [selectedStandardId, setSelectedStandardId] = useState<string>('is-302-2-3');
   const [docName, setDocName] = useState<string>('Product_Specification_Doc.txt');
   const [docContent, setDocContent] = useState<string>(
-    `Product Spec: 1200W Steam Iron. Mains Voltage 230V AC. Heating element with adjustable thermostat. Standard earthing pin provided. Casing made of polycarbonate plastic. High voltage insulation tested up to 1000V AC. Thermostat auto cut-off set at 180°C.`
+    `Product Spec: 1200W Steam Iron. Mains Voltage 230V AC. Heating element with adjustable thermostat. Standard earthing pin provided. Casing made of polycarbonate plastic. High voltage insulation tested up to 1000V AC. Thermostat auto cut-off set at 180 deg C.`
   );
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [result, setResult] = useState<GapAnalysisResult | null>(null);
@@ -29,9 +29,6 @@ export default function GapAnalyzerPage() {
   useEffect(() => {
     const list = getDynamicStandards();
     setStandards(list);
-    if (list.length > 0) {
-      setSelectedStandardId(list[0].id);
-    }
 
     const handleUpdate = () => {
       const updated = getDynamicStandards();
@@ -200,11 +197,12 @@ export default function GapAnalyzerPage() {
       {/* Input Section */}
       <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 10, padding: 24, boxShadow: '0 2px 8px rgba(40,30,20,0.03)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 20 }}>
-          <div>
+          <div suppressHydrationWarning>
             <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#171717', marginBottom: 6 }}>
               Target Indian Standard ({standards.length} Indexed)
             </label>
             <select
+              suppressHydrationWarning
               value={selectedStandardId}
               onChange={(e) => setSelectedStandardId(e.target.value)}
               style={{
