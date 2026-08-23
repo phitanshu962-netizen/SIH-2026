@@ -1,27 +1,45 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   FileSearch, Upload, CheckCircle2, AlertTriangle, XCircle, Download, 
-  ArrowRight, Shield, RefreshCw, FileText, CheckSquare, Sparkles
+  ArrowRight, Shield, RefreshCw, FileText, CheckSquare, Sparkles, BookOpen
 } from 'lucide-react';
 import { getDynamicStandards } from '@/lib/data/bisDatabase';
-import { GapAnalysisResult, GapItem } from '@/lib/types';
+import { saveGapAnalysisToFirebase } from '@/lib/firebase';
+import { GapAnalysisResult, GapItem, BISStandard } from '@/lib/types';
 
 export default function GapAnalyzerPage() {
-  const standards = getDynamicStandards();
-  const [selectedStandardId, setSelectedStandardId] = useState<string>(standards[0]?.id || 'is-302-2-3');
-  const [docName, setDocName] = useState<string>('Electric_Iron_Product_Spec_v2.pdf');
+  const [standards, setStandards] = useState<BISStandard[]>(() => getDynamicStandards());
+  const [selectedStandardId, setSelectedStandardId] = useState<string>('is-302-2-3');
+  const [docName, setDocName] = useState<string>('Product_Specification_Doc.txt');
   const [docContent, setDocContent] = useState<string>(
     `Product Spec: 1200W Steam Iron. Mains Voltage 230V AC. Heating element with adjustable thermostat. Standard earthing pin provided. Casing made of polycarbonate plastic. High voltage insulation tested up to 1000V AC. Thermostat auto cut-off set at 180°C.`
   );
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [result, setResult] = useState<GapAnalysisResult | null>(null);
 
+  useEffect(() => {
+    const list = getDynamicStandards();
+    setStandards(list);
+    if (list.length > 0) {
+      setSelectedStandardId(list[0].id);
+    }
+
+    const handleUpdate = () => {
+      const updated = getDynamicStandards();
+      setStandards(updated);
+    };
+
+    window.addEventListener('bis_standards_updated', handleUpdate);
+    return () => window.removeEventListener('bis_standards_updated', handleUpdate);
+  }, []);
+
   const selectedStandard = standards.find(s => s.id === selectedStandardId) || standards[0];
 
   const handleRunAnalysis = () => {
+    if (!selectedStandard) return;
     setIsAnalyzing(true);
     setTimeout(() => {
       const keyReqs = selectedStandard.keyRequirements || [];
@@ -40,6 +58,14 @@ export default function GapAnalyzerPage() {
           paramKey: param
         }))
       ];
+
+      if (allRequirementsToAudit.length === 0) {
+        allRequirementsToAudit.push({
+          clause: 'Clause 1.1',
+          requirement: selectedStandard.title,
+          paramKey: selectedStandard.title
+        });
+      }
 
       const gapItems: GapItem[] = allRequirementsToAudit.map((item) => {
         const words = item.paramKey.toLowerCase().split(/\s+/).filter(w => w.length > 3);
@@ -86,7 +112,7 @@ export default function GapAnalyzerPage() {
       const partialCount = gapItems.filter(i => i.status === 'partial').length;
       const score = Math.round((metCount * 100 + partialCount * 50) / gapItems.length);
 
-      setResult({
+      const gapResultPayload = {
         productName: docName.replace(/\.[^/.]+$/, ""),
         standardId: selectedStandard.id,
         isNumber: selectedStandard.isNumber,
@@ -96,7 +122,10 @@ export default function GapAnalyzerPage() {
         missingCount: gapItems.length - metCount - partialCount,
         partialCount,
         gaps: gapItems
-      });
+      };
+
+      setResult(gapResultPayload);
+      saveGapAnalysisToFirebase(gapResultPayload);
       setIsAnalyzing(false);
     }, 400);
   };
@@ -111,7 +140,7 @@ export default function GapAnalyzerPage() {
           <span>BIS Compliance Gap Analyzer Workspace</span>
         </h1>
         <p style={{ fontSize: 13, color: '#686868', margin: 0, maxWidth: 760 }}>
-          Upload product technical specifications to audit against official Indian Standard clause requirements.
+          Upload product technical specifications to audit against official Indian Standard clause requirements (including uploaded BIS standards).
         </p>
       </div>
 
@@ -120,7 +149,7 @@ export default function GapAnalyzerPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 20 }}>
           <div>
             <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#171717', marginBottom: 6 }}>
-              Target Indian Standard
+              Target Indian Standard ({standards.length} Indexed)
             </label>
             <select
               value={selectedStandardId}
@@ -132,9 +161,17 @@ export default function GapAnalyzerPage() {
               }}
             >
               {standards.map((s) => (
-                <option key={s.id} value={s.id}>{s.isNumber} - {s.title.slice(0, 45)}...</option>
+                <option key={s.id} value={s.id}>{s.isNumber} - {s.title.slice(0, 40)}...</option>
               ))}
             </select>
+
+            {selectedStandard && (
+              <div style={{ marginTop: 12, padding: 10, background: '#F8F6F2', borderRadius: 6, fontSize: 12, color: '#524F4D' }}>
+                <div style={{ fontWeight: 700, color: '#171717', marginBottom: 2 }}>{selectedStandard.isNumber}</div>
+                <div style={{ marginBottom: 4 }}>{selectedStandard.category} • {selectedStandard.applicableScheme}</div>
+                <div style={{ color: '#4F7D5A', fontWeight: 600 }}>{selectedStandard.mandatoryStatus}</div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -144,7 +181,8 @@ export default function GapAnalyzerPage() {
             <textarea
               value={docContent}
               onChange={(e) => setDocContent(e.target.value)}
-              rows={4}
+              rows={5}
+              placeholder="Enter or paste product specs to analyze compliance gaps against standard clauses..."
               style={{
                 width: '100%', padding: '10px 12px', background: '#FFFFFF',
                 border: '1px solid #E8E2DC', borderRadius: 6, fontSize: 13, color: '#242424',
@@ -157,12 +195,12 @@ export default function GapAnalyzerPage() {
         <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-end' }}>
           <button
             onClick={handleRunAnalysis}
-            disabled={isAnalyzing}
+            disabled={isAnalyzing || !selectedStandard}
             style={{
               background: '#F28C52', color: '#FFFFFF',
               border: 'none', borderRadius: 6,
               padding: '11px 24px', fontSize: 13.5, fontWeight: 700,
-              cursor: isAnalyzing ? 'not-allowed' : 'pointer',
+              cursor: isAnalyzing || !selectedStandard ? 'not-allowed' : 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 8
             }}
           >
@@ -178,63 +216,44 @@ export default function GapAnalyzerPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E8E2DC', paddingBottom: 16, marginBottom: 20 }}>
             <div>
               <h2 style={{ fontSize: 18, fontWeight: 800, color: '#171717', margin: '0 0 4px' }}>
-                Audit Results: {result.isNumber}
+                Gap Analysis Verdict: {result.isNumber}
               </h2>
-              <p style={{ fontSize: 12.5, color: '#686868', margin: 0 }}>
-                Compliance audit completed for {result.isNumber}. {result.metCount} met, {result.partialCount} partial, {result.missingCount} gaps.
+              <p style={{ margin: 0, fontSize: 12.5, color: '#686868' }}>
+                Audited against {result.totalRequirements} statutory requirements and clause parameters.
               </p>
             </div>
+
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11.5, color: '#686868' }}>Overall Score</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: result.overallComplianceScore > 75 ? '#4F7D5A' : '#C88732' }}>
+              <div style={{ fontSize: 24, fontWeight: 800, color: result.overallComplianceScore >= 70 ? '#4F7D5A' : '#B85C52' }}>
                 {result.overallComplianceScore}%
               </div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#686868' }}>Readiness Score</div>
             </div>
           </div>
 
-          {/* Split Screen Requirement Comparison */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px', padding: '10px 14px', background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 6, fontSize: 11.5, fontWeight: 700, color: '#686868', textTransform: 'uppercase' }}>
-              <div>STANDARD REQUIREMENT</div>
-              <div>SUBMITTED SPECIFICATION</div>
-              <div style={{ textAlign: 'right' }}>STATUS</div>
-            </div>
-
-            {result.gaps.map((item, i) => (
+          {/* Gap Items Table */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {result.gaps.map((gap, i) => (
               <div
                 key={i}
                 style={{
-                  display: 'grid', gridTemplateColumns: '1fr 1fr 120px',
-                  padding: '14px 16px', border: '1px solid #E8E2DC', borderRadius: 6,
-                  alignItems: 'center', gap: 12, background: '#FFFFFF'
+                  padding: 14, borderRadius: 8,
+                  border: gap.status === 'met' ? '1px solid #B5D5BF' : gap.status === 'partial' ? '1px solid #F4C4A5' : '1px solid #F8D7DA',
+                  background: gap.status === 'met' ? '#F8FCF9' : gap.status === 'partial' ? '#FFFDF8' : '#FDF2F0'
                 }}
               >
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#E9783F', marginBottom: 2 }}>{item.clause}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#171717' }}>{item.requirement}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 800, fontSize: 13, color: '#171717' }}>{gap.clause}: {gap.requirement}</span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                    background: gap.status === 'met' ? '#EBF4EE' : gap.status === 'partial' ? '#FFF1E8' : '#FDF2F0',
+                    color: gap.status === 'met' ? '#4F7D5A' : gap.status === 'partial' ? '#E9783F' : '#B85C52'
+                  }}>
+                    {gap.status.toUpperCase()}
+                  </span>
                 </div>
-
-                <div style={{ fontSize: 12.5, color: '#686868' }}>
-                  {item.userDocEvidence}
-                </div>
-
-                <div style={{ textAlign: 'right' }}>
-                  {item.status === 'met' && (
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: '#4F7D5A', background: '#EBF4EE', border: '1px solid #B5D5BF', borderRadius: 4, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      ✓ Compliant
-                    </span>
-                  )}
-                  {item.status === 'partial' && (
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: '#C88732', background: '#FEF7ED', border: '1px solid #F4D3A5', borderRadius: 4, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      ⚠ Partial
-                    </span>
-                  )}
-                  {item.status === 'missing' && (
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: '#B85C52', background: '#FDF2F0', border: '1px solid #E8BDB8', borderRadius: 4, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      ✕ Gap
-                    </span>
-                  )}
-                </div>
+                <div style={{ fontSize: 12, color: '#524F4D', marginBottom: 4 }}>{gap.userDocEvidence}</div>
+                <div style={{ fontSize: 11.5, color: '#686868' }}><strong>Remediation:</strong> {gap.remediation}</div>
               </div>
             ))}
           </div>

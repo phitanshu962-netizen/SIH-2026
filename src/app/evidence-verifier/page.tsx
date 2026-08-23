@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   ShieldCheck, AlertTriangle, FileText, CheckCircle2, XCircle, HelpCircle, 
@@ -9,10 +9,11 @@ import {
   Upload, FileCode, CheckSquare, Clock, ShieldAlert, Cpu, Share2, BookOpen
 } from 'lucide-react';
 import { auditEvidenceClaimPipeline, getDynamicStandards } from '@/lib/data/bisDatabase';
-import { EvidenceVerificationResult, DecomposedSubClaim, ClaimEvidenceMatrixRow } from '@/lib/types';
+import { saveEvidenceAuditToFirebase } from '@/lib/firebase';
+import { EvidenceVerificationResult, DecomposedSubClaim, ClaimEvidenceMatrixRow, BISStandard } from '@/lib/types';
 
 export default function EvidenceVerifierPage() {
-  const standards = getDynamicStandards();
+  const [standards, setStandards] = useState<BISStandard[]>(() => getDynamicStandards());
   
   // Operational Modes
   const [activeMode, setActiveMode] = useState<'claim' | 'document' | 'ai_answer'>('claim');
@@ -35,10 +36,31 @@ export default function EvidenceVerifierPage() {
 
   const [copiedRewrite, setCopiedRewrite] = useState<boolean>(false);
 
+  useEffect(() => {
+    const list = getDynamicStandards();
+    setStandards(list);
+    if (list.length > 0 && (!selectedStandardId || !list.some(s => s.id === selectedStandardId))) {
+      setSelectedStandardId(list[0].id);
+    }
+
+    const handleUpdate = () => {
+      const updated = getDynamicStandards();
+      setStandards(updated);
+    };
+
+    window.addEventListener('bis_standards_updated', handleUpdate);
+    return () => window.removeEventListener('bis_standards_updated', handleUpdate);
+  }, []);
+
   const handleRunVerification = (customText?: string) => {
     const textToRun = customText || claimInput;
     const result = auditEvidenceClaimPipeline(textToRun, selectedStandardId);
     setAuditResult(result);
+    saveEvidenceAuditToFirebase({
+      claim: textToRun,
+      standardId: selectedStandardId,
+      ...result
+    });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

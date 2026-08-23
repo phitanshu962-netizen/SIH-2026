@@ -1,177 +1,256 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { CheckSquare, Printer } from 'lucide-react';
+import Link from 'next/link';
+import { CheckSquare, Printer, CheckCircle2, ArrowRight, ShieldCheck, Download, Sparkles } from 'lucide-react';
 import { getDynamicStandards } from '@/lib/data/bisDatabase';
+import { saveChecklistProgressToFirebase, fetchChecklistProgressFromFirebase } from '@/lib/firebase';
 import { ComplianceCheckItem, BISStandard } from '@/lib/types';
 
 export default function ChecklistPage() {
-  const [standards, setStandards] = useState<BISStandard[]>([]);
-  const [selectedStandardId, setSelectedStandardId] = useState<string>('');
+  const [standards, setStandards] = useState<BISStandard[]>(() => getDynamicStandards());
+  const [selectedStandardId, setSelectedStandardId] = useState<string>('is-302-2-3');
   const [items, setItems] = useState<ComplianceCheckItem[]>([]);
 
-  useEffect(() => {
+  const loadStandardsAndChecklist = async () => {
     const list = getDynamicStandards();
     setStandards(list);
     if (list.length > 0) {
-      setSelectedStandardId(list[0].id);
-      loadItemsForStandard(list[0]);
+      const active = selectedStandardId ? list.find(s => s.id === selectedStandardId) || list[0] : list[0];
+      setSelectedStandardId(active.id);
+      
+      // Try to load saved checklist from Firebase
+      const saved = await fetchChecklistProgressFromFirebase(active.id);
+      if (saved && saved.items && saved.items.length > 0) {
+        setItems(saved.items);
+      } else {
+        loadItemsForStandard(active);
+      }
     }
+  };
+
+  useEffect(() => {
+    loadStandardsAndChecklist();
+
+    const handleUpdate = () => {
+      loadStandardsAndChecklist();
+    };
+
+    window.addEventListener('bis_standards_updated', handleUpdate);
+    return () => window.removeEventListener('bis_standards_updated', handleUpdate);
   }, []);
 
   const loadItemsForStandard = (std: BISStandard) => {
-    setItems([
-      ...std.keyRequirements.map((req, idx) => ({
+    const keyReqs = std.keyRequirements || [];
+    const docs = std.requiredDocuments || [];
+    const testParams = std.testingParameters || [];
+
+    const newItems: ComplianceCheckItem[] = [
+      ...keyReqs.map((req, idx) => ({
         id: `req-${idx}`,
         standardId: std.id,
         title: req,
-        category: "Technical Requirement",
+        category: "Technical & Safety Requirement",
         mandatory: true,
-        status: (idx === 0 ? 'passed' : idx === 1 ? 'passed' : 'pending') as 'passed' | 'pending' | 'failed' | 'not_applicable',
-        notes: ""
+        status: (idx === 0 ? 'passed' : 'pending') as 'passed' | 'pending' | 'failed' | 'not_applicable',
+        notes: `Statutory requirement under ${std.isNumber}`
       })),
-      ...std.requiredDocuments.map((doc, idx) => ({
+      ...docs.map((doc, idx) => ({
         id: `doc-${idx}`,
         standardId: std.id,
         title: `Documentation: ${doc}`,
-        category: "Documentation",
+        category: "Factory Documentation & QA Plan",
         mandatory: true,
         status: (idx === 0 ? 'passed' : 'pending') as 'passed' | 'pending' | 'failed' | 'not_applicable',
-        notes: ""
+        notes: `Required for BIS inspection audit under ${std.applicableScheme}`
+      })),
+      ...testParams.map((param, idx) => ({
+        id: `test-${idx}`,
+        standardId: std.id,
+        title: `Laboratory Test: ${param}`,
+        category: "Laboratory Testing Validation",
+        mandatory: true,
+        status: 'pending' as 'passed' | 'pending' | 'failed' | 'not_applicable',
+        notes: `Must be tested at NABL/BIS accredited laboratory`
       }))
-    ]);
+    ];
+
+    if (newItems.length === 0) {
+      newItems.push({
+        id: 'req-0',
+        standardId: std.id,
+        title: std.title,
+        category: 'General Conformity',
+        mandatory: true,
+        status: 'pending',
+        notes: std.scope
+      });
+    }
+
+    setItems(newItems);
   };
 
-  const handleStandardChange = (id: string) => {
+  const handleStandardChange = async (id: string) => {
     setSelectedStandardId(id);
     const std = standards.find(s => s.id === id);
-    if (std) loadItemsForStandard(std);
+    if (std) {
+      const saved = await fetchChecklistProgressFromFirebase(id);
+      if (saved && saved.items && saved.items.length > 0) {
+        setItems(saved.items);
+      } else {
+        loadItemsForStandard(std);
+      }
+    }
   };
 
   const handleStatusToggle = (id: string, newStatus: 'passed' | 'pending' | 'failed') => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
+    setItems(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, status: newStatus } : item);
+      const passed = updated.filter(i => i.status === 'passed').length;
+      const progress = updated.length > 0 ? Math.round((passed / updated.length) * 100) : 0;
+      saveChecklistProgressToFirebase(selectedStandardId, updated, progress);
+      return updated;
+    });
   };
 
+  const selectedStandard = standards.find(s => s.id === selectedStandardId) || standards[0];
   const passedCount = items.filter(i => i.status === 'passed').length;
   const progressPercent = items.length > 0 ? Math.round((passedCount / items.length) * 100) : 0;
 
   return (
-    <div className="space-y-6">
-      
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28, width: '100%' }}>
+
       {/* Header Banner */}
-      <div className="bg-white rounded-xl p-6 border border-orange-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 10, padding: 24, boxShadow: '0 2px 8px rgba(40,30,20,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <h2 className="text-xl font-extrabold text-slate-900 flex items-center space-x-2">
-            <CheckSquare className="w-6 h-6 text-orange-600" />
-            <span>Interactive BIS Compliance Checklist</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Track implementation progress, document uploads, and lab test readiness for BIS licensing.
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#171717', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <CheckSquare style={{ width: 24, height: 24, color: '#F28C52' }} />
+            <span>Interactive Compliance Checklist Generator</span>
+          </h1>
+          <p style={{ fontSize: 13, color: '#686868', margin: 0, maxWidth: 760 }}>
+            Generate factory readiness audit checklists across all {standards.length} indexed BIS standards.
           </p>
         </div>
 
-        <button 
+        <button
           onClick={() => window.print()}
-          className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow flex items-center space-x-2"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: '#FFFFFF', border: '1px solid #E8E2DC', color: '#171717',
+            padding: '9px 16px', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer'
+          }}
         >
-          <Printer className="w-4 h-4 text-orange-400" />
-          <span>Export / Print Report</span>
+          <Printer style={{ width: 15, height: 15 }} />
+          <span>Print Checklist</span>
         </button>
       </div>
 
-      {/* Standard Selector & Progress Bar */}
-      <div className="sap-card p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-orange-100 pb-4">
-          <div className="w-full sm:w-72">
-            <label className="block text-xs font-bold text-slate-700 mb-1">Select Target Indian Standard</label>
-            <select
-              value={selectedStandardId}
-              onChange={(e) => handleStandardChange(e.target.value)}
-              className="w-full px-3 py-2 bg-orange-50/50 border border-orange-200 rounded-lg text-xs text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-orange-500"
+      {/* Standard Selector & Progress Header */}
+      <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 10, padding: 20, boxShadow: '0 2px 8px rgba(40,30,20,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#171717', marginBottom: 4 }}>
+            Select Indian Standard
+          </label>
+          <select
+            value={selectedStandardId}
+            onChange={(e) => handleStandardChange(e.target.value)}
+            style={{
+              width: '100%', padding: '10px 12px', background: '#FFFCF8',
+              border: '1px solid #E8E2DC', borderRadius: 6, fontSize: 13, color: '#242424', outline: 'none'
+            }}
+          >
+            {standards.map((s) => (
+              <option key={s.id} value={s.id}>{s.isNumber} - {s.title.slice(0, 45)}...</option>
+            ))}
+          </select>
+        </div>
+
+        {selectedStandard && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            <div>
+              <div style={{ fontSize: 11, color: '#686868', fontWeight: 600 }}>Audit Progress</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: progressPercent === 100 ? '#4F7D5A' : '#F28C52' }}>
+                {passedCount} / {items.length} ({progressPercent}%)
+              </div>
+            </div>
+
+            <div style={{ width: 120, height: 8, background: '#E8E2DC', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ width: `${progressPercent}%`, height: '100%', background: '#F28C52', borderRadius: 4, transition: 'width 0.3s ease' }} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Checklist Items Table */}
+      <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 10, padding: 24, boxShadow: '0 2px 8px rgba(40,30,20,0.03)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {items.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                padding: 16, border: '1px solid #E8E2DC', borderRadius: 8,
+                background: item.status === 'passed' ? '#F8FCF9' : '#FFFCF8',
+                transition: 'all 0.15s ease'
+              }}
             >
-              {standards.map(std => (
-                <option key={std.id} value={std.id}>{std.isNumber}: {std.category}</option>
-              ))}
-            </select>
-          </div>
+              <div style={{ flex: 1, paddingRight: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, background: '#FFF1E8', color: '#E9783F', border: '1px solid #F4C4A5', borderRadius: 4, padding: '1px 6px' }}>
+                    {item.category}
+                  </span>
+                  {item.mandatory && (
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#B85C52', background: '#FDF2F0', borderRadius: 4, padding: '1px 6px' }}>
+                      Mandatory
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#171717', marginBottom: 2 }}>{item.title}</div>
+                <div style={{ fontSize: 12, color: '#686868' }}>{item.notes}</div>
+              </div>
 
-          {/* Meter */}
-          <div className="flex-1 max-w-md bg-orange-50/70 p-4 rounded-xl border border-orange-200 space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-700">Audit Readiness Score</span>
-              <span className="font-extrabold text-orange-700">{progressPercent}% ({passedCount}/{items.length} Completed)</span>
+              {/* Status Action Buttons */}
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  onClick={() => handleStatusToggle(item.id, 'passed')}
+                  style={{
+                    background: item.status === 'passed' ? '#4F7D5A' : '#FFFFFF',
+                    color: item.status === 'passed' ? '#FFFFFF' : '#4F7D5A',
+                    border: '1px solid #B5D5BF', borderRadius: 4, padding: '6px 12px',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  ✓ Passed
+                </button>
+
+                <button
+                  onClick={() => handleStatusToggle(item.id, 'pending')}
+                  style={{
+                    background: item.status === 'pending' ? '#F28C52' : '#FFFFFF',
+                    color: item.status === 'pending' ? '#FFFFFF' : '#686868',
+                    border: '1px solid #E8E2DC', borderRadius: 4, padding: '6px 12px',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  Pending
+                </button>
+
+                <button
+                  onClick={() => handleStatusToggle(item.id, 'failed')}
+                  style={{
+                    background: item.status === 'failed' ? '#B85C52' : '#FFFFFF',
+                    color: item.status === 'failed' ? '#FFFFFF' : '#B85C52',
+                    border: '1px solid #F8D7DA', borderRadius: 4, padding: '6px 12px',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  ✕ Gap
+                </button>
+              </div>
+
             </div>
-            <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-              <div 
-                className="bg-gradient-to-r from-orange-500 to-emerald-500 h-full transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              ></div>
-            </div>
-          </div>
+          ))}
         </div>
-
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-orange-200 text-slate-600 text-xs font-bold bg-orange-50/70">
-                <th className="py-3 px-4">Requirement / Task</th>
-                <th className="py-3 px-4">Category</th>
-                <th className="py-3 px-4 text-center">Status</th>
-                <th className="py-3 px-4">Compliance Notes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {items.map((item) => (
-                <tr key={item.id} className="hover:bg-orange-50/30 transition-colors">
-                  <td className="py-3 px-4 font-bold text-slate-900 max-w-sm">{item.title}</td>
-                  <td className="py-3 px-4 text-slate-600 font-medium">{item.category}</td>
-                  <td className="py-3 px-4 text-center">
-                    <div className="inline-flex rounded-lg p-0.5 bg-orange-50 border border-orange-200">
-                      <button
-                        onClick={() => handleStatusToggle(item.id, 'passed')}
-                        className={`px-2 py-1 rounded text-[11px] font-bold transition-all ${
-                          item.status === 'passed' ? 'bg-emerald-600 text-white shadow' : 'text-slate-600 hover:text-emerald-700'
-                        }`}
-                      >
-                        Passed
-                      </button>
-                      <button
-                        onClick={() => handleStatusToggle(item.id, 'pending')}
-                        className={`px-2 py-1 rounded text-[11px] font-bold transition-all ${
-                          item.status === 'pending' ? 'bg-amber-500 text-white shadow' : 'text-slate-600 hover:text-amber-700'
-                        }`}
-                      >
-                        Pending
-                      </button>
-                      <button
-                        onClick={() => handleStatusToggle(item.id, 'failed')}
-                        className={`px-2 py-1 rounded text-[11px] font-bold transition-all ${
-                          item.status === 'failed' ? 'bg-rose-600 text-white shadow' : 'text-slate-600 hover:text-rose-700'
-                        }`}
-                      >
-                        Action Req
-                      </button>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <input 
-                      type="text"
-                      value={item.notes}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setItems(prev => prev.map(i => i.id === item.id ? { ...i, notes: val } : i));
-                      }}
-                      placeholder="Add lab test log or remarks..."
-                      className="w-full px-2 py-1 bg-white border border-orange-200 rounded text-slate-700 focus:outline-none focus:border-orange-500 text-xs"
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
       </div>
 
     </div>

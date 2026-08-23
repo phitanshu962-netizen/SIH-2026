@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { UserPersona, AssistantAgentResponse, AiActionCard } from '@/lib/types';
 import { processAssistantResearchAgent } from '@/lib/data/bisDatabase';
+import { saveFeedbackLocal } from '@/lib/firebase';
 
 function AssistantContent() {
   const searchParams = useSearchParams();
@@ -21,6 +22,7 @@ function AssistantContent() {
   const [persona, setPersona] = useState<UserPersona>('manufacturer');
   const [researchMode, setResearchMode] = useState<'standard' | 'research' | 'compliance'>('standard');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [feedbackGiven, setFeedbackGiven] = useState<Record<number, boolean>>({});
 
   const [messages, setMessages] = useState<Array<{
     sender: 'user' | 'bot';
@@ -233,6 +235,45 @@ function AssistantContent() {
                       </button>
                     </div>
                   )}
+
+                  {/* Feedback Action Buttons */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid #E8E2DC' }}>
+                    <span style={{ fontSize: 11, color: '#686868' }}>Was this official response helpful?</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button
+                        onClick={() => {
+                          setFeedbackGiven(prev => ({ ...prev, [idx]: true }));
+                          saveFeedbackLocal(msg.text.slice(0, 100), true, "Helpful response in Assistant");
+                        }}
+                        disabled={feedbackGiven[idx]}
+                        style={{
+                          background: feedbackGiven[idx] ? '#EBF4EE' : '#FFFCF8',
+                          border: '1px solid #E8E2DC', borderRadius: 4, padding: '3px 8px',
+                          fontSize: 11, fontWeight: 700, color: '#4F7D5A', cursor: feedbackGiven[idx] ? 'default' : 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 4
+                        }}
+                      >
+                        <ThumbsUp style={{ width: 12, height: 12 }} />
+                        <span>{feedbackGiven[idx] ? 'Logged' : 'Yes'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setFeedbackGiven(prev => ({ ...prev, [idx]: true }));
+                          saveFeedbackLocal(msg.text.slice(0, 100), false, "Needs improvement in Assistant");
+                        }}
+                        disabled={feedbackGiven[idx]}
+                        style={{
+                          background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 4, padding: '3px 8px',
+                          fontSize: 11, fontWeight: 700, color: '#686868', cursor: feedbackGiven[idx] ? 'default' : 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 4
+                        }}
+                      >
+                        <ThumbsDown style={{ width: 12, height: 12 }} />
+                        <span>No</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

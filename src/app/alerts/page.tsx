@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Bell, AlertCircle, Calendar, ExternalLink, Shield, Check, Mail, Filter, ChevronRight,
@@ -8,10 +8,11 @@ import {
   Search, ShieldAlert, Scale, ArrowRight, Eye, AlertTriangle, ArrowUpRight, Zap, Info, Building2, Sliders
 } from 'lucide-react';
 import { getStandardAlerts } from '@/lib/data/bisDatabase';
+import { saveAlertSubscriptionToFirebase, saveWatchlistToFirebase, fetchWatchlistFromFirebase } from '@/lib/firebase';
 import { StandardAlert } from '@/lib/types';
 
 export default function StandardAlertsPage() {
-  const alerts = getStandardAlerts();
+  const [alerts, setAlerts] = useState<StandardAlert[]>(() => getStandardAlerts());
   
   // State Management
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -20,6 +21,24 @@ export default function StandardAlertsPage() {
   const [selectedStage, setSelectedStage] = useState<string>('all');
   const [showWatchlistOnly, setShowWatchlistOnly] = useState<boolean>(false);
   const [watchlistIds, setWatchlistIds] = useState<string[]>(['alert-is-302-2-3', 'alert-is-4151']);
+
+  useEffect(() => {
+    setAlerts(getStandardAlerts());
+
+    // Fetch user watchlist from Firebase
+    fetchWatchlistFromFirebase('default_user').then((saved) => {
+      if (saved && saved.length > 0) {
+        setWatchlistIds(saved);
+      }
+    });
+
+    const handleUpdate = () => {
+      setAlerts(getStandardAlerts());
+    };
+
+    window.addEventListener('bis_standards_updated', handleUpdate);
+    return () => window.removeEventListener('bis_standards_updated', handleUpdate);
+  }, []);
   
   // Email subscription state
   const [subscribed, setSubscribed] = useState<boolean>(false);
@@ -29,15 +48,20 @@ export default function StandardAlertsPage() {
   const [activeModalAlert, setActiveModalAlert] = useState<StandardAlert | null>(null);
   const [expandedGraphAlertId, setExpandedGraphAlertId] = useState<string | null>(null);
 
-  const handleSubscribe = (e: React.FormEvent) => {
+  const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email) setSubscribed(true);
+    if (email) {
+      setSubscribed(true);
+      await saveAlertSubscriptionToFirebase(email, ['all']);
+    }
   };
 
   const toggleWatchlist = (alertId: string) => {
-    setWatchlistIds(prev => 
-      prev.includes(alertId) ? prev.filter(id => id !== alertId) : [...prev, alertId]
-    );
+    setWatchlistIds(prev => {
+      const updated = prev.includes(alertId) ? prev.filter(id => id !== alertId) : [...prev, alertId];
+      saveWatchlistToFirebase('default_user', updated);
+      return updated;
+    });
   };
 
   // Filter Alerts

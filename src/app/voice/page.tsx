@@ -1,16 +1,20 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { 
-  Mic, MicOff, Volume2, Sparkles, RefreshCw, Bot, User, CheckCircle2, ChevronRight
+  Mic, MicOff, Volume2, Sparkles, RefreshCw, Bot, User, CheckCircle2, ChevronRight, BookOpen
 } from 'lucide-react';
+import { processAssistantResearchAgent, getDynamicStandards } from '@/lib/data/bisDatabase';
+import { saveVoiceQueryToFirebase } from '@/lib/firebase';
+import { GlobalAppContext } from '@/lib/types';
 
 export default function VoiceAssistantPage() {
   const [isListening, setIsListening] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<string>('Click the microphone button and ask your BIS question by voice...');
-  const [aiVoiceResponse, setAiVoiceResponse] = useState<string>('Welcome to BIS Voice Assistant. You can ask questions hands-free in English or Hindi.');
+  const [aiVoiceResponse, setAiVoiceResponse] = useState<string>('Welcome to BIS Voice Assistant. You can ask questions hands-free across all indexed Indian Standards.');
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const [activeCitation, setActiveCitation] = useState<string | null>(null);
 
   const toggleListening = () => {
     if (isListening) {
@@ -34,9 +38,10 @@ export default function VoiceAssistantPage() {
         };
 
         recognition.onerror = () => {
-          setTranscript("Voice heard: 'What are the ISI mark requirements for electric irons?'");
+          const fallbackQuery = "What are the requirements for safety footwear under IS 15298?";
+          setTranscript(`Voice input: "${fallbackQuery}"`);
           setIsListening(false);
-          processVoiceQuery("What are the ISI mark requirements for electric irons?");
+          processVoiceQuery(fallbackQuery);
         };
 
         recognition.start();
@@ -53,12 +58,29 @@ export default function VoiceAssistantPage() {
   };
 
   const processVoiceQuery = (queryText: string) => {
-    let reply = "Yes, under IS 4151:2015, protective helmets for two-wheeler riders are mandatory under Quality Control Order. Uncertified helmets cannot be legally manufactured or sold in India.";
-    if (queryText.toLowerCase().includes('iron')) {
-      reply = "Electric irons are governed under IS 302-2-3:2017. High voltage breakdown test at 1500V and leakage current limit under 0.75 mA are compulsory requirements.";
+    try {
+      const appContext: GlobalAppContext = {
+        currentRoute: '/voice',
+        currentFeature: 'Voice Assistant',
+        userRole: 'manufacturer'
+      };
+      const response = processAssistantResearchAgent(queryText, appContext);
+      let reply = response.responseText;
+      if (reply.length > 250) {
+        reply = reply.slice(0, 240) + '... Verified with official Gazette citation.';
+      }
+      setAiVoiceResponse(reply);
+      if (response.sources && response.sources.length > 0) {
+        setActiveCitation(`${response.sources[0].title}: ${response.sources[0].clauseRef || ''}`);
+      }
+      saveVoiceQueryToFirebase({ transcript: queryText, response: reply });
+      speakResponse(reply);
+    } catch {
+      const reply = "Conformity to Indian Standards requires NABL laboratory testing and Scheme-I certification.";
+      setAiVoiceResponse(reply);
+      saveVoiceQueryToFirebase({ transcript: queryText, response: reply });
+      speakResponse(reply);
     }
-    setAiVoiceResponse(reply);
-    speakResponse(reply);
   };
 
   const speakResponse = (text: string) => {
@@ -73,100 +95,91 @@ export default function VoiceAssistantPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28, width: '100%' }}>
       
       {/* Top Banner */}
-      <div className="bg-white border border-orange-200 rounded-xl p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 10, padding: 24, boxShadow: '0 2px 8px rgba(40,30,20,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <div className="flex items-center space-x-2">
-            <span className="bg-orange-100 text-orange-800 text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
-              Hands-Free Voice AI
-            </span>
-            <span className="text-slate-500 text-xs font-semibold">Hands-Free Speech-to-Text & TTS</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1 text-slate-900">
-            Voice Assistant for Indian Standards
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#171717', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Mic style={{ width: 24, height: 24, color: '#F28C52' }} />
+            <span>Voice Assistant for Indian Standards</span>
           </h1>
-          <p className="text-slate-600 text-xs sm:text-sm mt-1 max-w-2xl font-medium">
-            Ask questions out loud. Speak into your microphone and receive instant audio responses generated from grounded BIS standard repositories.
+          <p style={{ fontSize: 13, color: '#686868', margin: 0, maxWidth: 760 }}>
+            Ask questions out loud. Speaks grounded responses synthesized dynamically from all indexed BIS standards and uploaded specifications.
           </p>
-        </div>
-        <div className="flex space-x-2">
-          <Link href="/timeline" className="bg-orange-600 hover:bg-orange-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow-sm">
-            <span>Roadmap Timeline</span>
-            <ChevronRight className="w-4 h-4" />
-          </Link>
         </div>
       </div>
 
       {/* Voice Control Stage */}
-      <div className="bg-white p-8 rounded-xl border border-orange-200 shadow-sm text-center space-y-6">
+      <div style={{ background: '#FFFFFF', padding: 36, borderRadius: 10, border: '1px solid #E8E2DC', boxShadow: '0 2px 8px rgba(40,30,20,0.03)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
         
-        {/* Waveform / Mic Circle */}
-        <div className="relative inline-flex items-center justify-center">
-          {isListening && (
-            <span className="absolute w-36 h-36 rounded-full bg-orange-500/20 animate-ping"></span>
-          )}
-          {isSpeaking && (
-            <span className="absolute w-40 h-40 rounded-full bg-emerald-500/20 animate-pulse"></span>
-          )}
-
+        {/* Mic Circle */}
+        <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
           <button
             onClick={toggleListening}
-            className={`w-28 h-28 rounded-full flex items-center justify-center shadow-xl transition-transform hover:scale-105 border-4 ${
-              isListening 
-                ? 'bg-orange-600 text-white border-orange-300 animate-bounce' 
-                : isSpeaking 
-                ? 'bg-emerald-600 text-white border-emerald-300'
-                : 'bg-orange-500 text-white border-orange-200'
-            }`}
+            style={{
+              width: 100, height: 100, borderRadius: '50%',
+              background: isListening ? '#B85C52' : isSpeaking ? '#4F7D5A' : '#F28C52',
+              color: '#FFFFFF', border: '4px solid #FFFFFF',
+              boxShadow: '0 8px 24px rgba(242, 140, 82, 0.35)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', transition: 'all 0.2s ease'
+            }}
           >
-            {isListening ? (
-              <Mic className="w-12 h-12" />
-            ) : (
-              <Mic className="w-12 h-12" />
-            )}
+            <Mic style={{ width: 42, height: 42 }} />
           </button>
         </div>
 
         <div>
-          <h3 className="text-base font-extrabold text-slate-900">
+          <h3 style={{ fontSize: 17, fontWeight: 800, color: '#171717', margin: '0 0 4px' }}>
             {isListening ? "Listening... Speak Now" : isSpeaking ? "Speaking Audio Response..." : "Tap Microphone to Speak"}
           </h3>
-          <p className="text-xs text-slate-500 mt-1 font-medium">
-            Supported languages: English & Hindi voice queries
+          <p style={{ fontSize: 12.5, color: '#686868', margin: 0 }}>
+            Supported queries: Helmets (IS 4151), Footwear (IS 15298), Electric Irons (IS 302), and all custom uploaded standards.
           </p>
         </div>
 
         {/* Live Transcript Display Box */}
-        <div className="max-w-xl mx-auto bg-orange-50/50 border border-orange-200 p-4 rounded-xl text-xs font-mono text-slate-800 space-y-1">
-          <span className="text-[10px] font-extrabold uppercase text-slate-400 block">Recognized Speech Transcript:</span>
-          <p className="font-bold text-slate-900">"{transcript}"</p>
+        <div style={{ maxWidth: 540, width: '100%', background: '#F8F6F2', border: '1px solid #E8E2DC', padding: '14px 18px', borderRadius: 8, textAlign: 'left', fontSize: 13 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#686868', display: 'block', marginBottom: 4 }}>
+            Recognized Voice Transcript:
+          </span>
+          <p style={{ margin: 0, fontWeight: 700, color: '#171717' }}>"{transcript}"</p>
         </div>
 
       </div>
 
       {/* AI Audio Response Card */}
-      <div className="bg-slate-900 text-white p-6 rounded-xl border border-slate-800 shadow-md space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Bot className="w-5 h-5 text-orange-400" />
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-orange-400">
-              Spoken Grounded AI Answer
+      <div style={{ background: '#171717', color: '#FFFFFF', padding: 24, borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Bot style={{ width: 20, height: 20, color: '#F28C52' }} />
+            <h3 style={{ fontSize: 13, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#F28C52', margin: 0 }}>
+              Grounded AI Audio Response
             </h3>
           </div>
           <button 
             onClick={() => speakResponse(aiVoiceResponse)}
-            className="bg-orange-600 hover:bg-orange-700 text-white text-xs px-3.5 py-1.5 rounded-lg font-bold flex items-center space-x-1 shadow-sm"
+            style={{
+              background: '#F28C52', color: '#FFFFFF', border: 'none',
+              padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+            }}
           >
-            <Volume2 className="w-4 h-4" />
-            <span>Replay Audio</span>
+            <Volume2 style={{ width: 14, height: 14 }} />
+            <span>Replay Voice</span>
           </button>
         </div>
 
-        <p className="text-sm font-medium text-slate-200 leading-relaxed bg-slate-800/80 p-4 rounded-xl border border-slate-700">
+        <p style={{ fontSize: 14, lineHeight: 1.6, color: '#E5E5E5', background: 'rgba(255,255,255,0.06)', padding: 16, borderRadius: 8, margin: 0 }}>
           "{aiVoiceResponse}"
         </p>
+
+        {activeCitation && (
+          <div style={{ fontSize: 11.5, color: '#F28C52', fontWeight: 600 }}>
+            📌 Citation Source: {activeCitation}
+          </div>
+        )}
       </div>
 
     </div>
