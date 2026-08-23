@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   FileText, Search, Download, Printer, CheckCircle2, AlertTriangle, 
@@ -12,8 +12,8 @@ import { getDynamicStandards, getTestingMappings, calculateTestingReadiness, get
 import { BISStandard, TestingMapping, TestClassificationCategory } from '@/lib/types';
 
 export default function TestingMapperPage() {
-  const standards = getDynamicStandards();
-  const [selectedStandardId, setSelectedStandardId] = useState<string>(standards[0]?.id || 'is-302-2-3');
+  const [standards, setStandards] = useState<BISStandard[]>(() => getDynamicStandards());
+  const [selectedStandardId, setSelectedStandardId] = useState<string>('is-302-2-3');
   const [activeTab, setActiveTab] = useState<'matrix' | 'sample_plan' | 'equipment' | 'decision_tree' | 'report_auditor'>('matrix');
 
   // Search & Filter State
@@ -27,7 +27,23 @@ export default function TestingMapperPage() {
   // Test Report Auditor Upload State
   const [auditedReportName, setAuditedReportName] = useState<string | null>(null);
 
-  const selectedStandard = standards.find(s => s.id === selectedStandardId) || standards[0];
+  useEffect(() => {
+    const list = getDynamicStandards();
+    setStandards(list);
+    if (list.length > 0 && (!selectedStandardId || !list.some(s => s.id === selectedStandardId))) {
+      setSelectedStandardId(list[0].id);
+    }
+
+    const handleUpdate = () => {
+      const updated = getDynamicStandards();
+      setStandards(updated);
+    };
+
+    window.addEventListener('bis_standards_updated', handleUpdate);
+    return () => window.removeEventListener('bis_standards_updated', handleUpdate);
+  }, []);
+
+  const selectedStandard = standards.find(s => s.id === selectedStandardId) || standards[0] || getDynamicStandards()[0];
   const mappings = getTestingMappings(selectedStandardId);
   const readiness = calculateTestingReadiness(selectedStandardId);
   const labs = getTestingLabs(selectedStandardId);

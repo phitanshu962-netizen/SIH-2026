@@ -7,11 +7,13 @@ import {
   Shield, BookOpen, Search, CheckSquare, BarChart3, Globe, Users,
   FileSearch, GitCompare, HelpCircle, Bell, FileText, Mic, Calendar,
   TestTube, MapPin, CheckCircle2, Sparkles, LogOut, Command, ChevronLeft,
-  ChevronRight, X, ArrowUpRight, Cpu, SlidersHorizontal, Home, ExternalLink, Volume2, VolumeX
+  ChevronRight, X, ArrowUpRight, Cpu, SlidersHorizontal, Home, ExternalLink,
+  ThumbsUp, ThumbsDown, Volume2, VolumeX
 } from 'lucide-react';
 import { UserPersona, LanguageCode } from '@/lib/types';
 import { getDynamicStandards, processAssistantResearchAgent } from '@/lib/data/bisDatabase';
 import { AssistantAgentResponse } from '@/lib/types';
+import { saveFeedbackLocal } from '@/lib/firebase';
 import { LanguageProvider, useLanguage } from '@/context/LanguageContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { speakAudioResponse, stopAudioPlayback } from '@/lib/voiceAssistantHelper';
@@ -856,6 +858,25 @@ function ShellInner({ children }: { children: React.ReactNode }) {
                       style={{ background: '#F28C52', color: '#FFFFFF', border: 'none', borderRadius: 4, padding: '5px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}
                     >
                       <span>{msg.agentResponse.actionCard.buttonLabel}</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Bot Feedback Quick Action */}
+                {msg.sender === 'bot' && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 6, paddingTop: 6, borderTop: '1px solid #E8E2DC' }}>
+                    <span style={{ fontSize: 10, color: '#686868' }}>Helpful?</span>
+                    <button
+                      onClick={() => saveFeedbackLocal(msg.text.slice(0, 80), true, "Helpful panel answer")}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4F7D5A', display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, fontWeight: 700 }}
+                    >
+                      <ThumbsUp style={{ width: 10, height: 10 }} /> Yes
+                    </button>
+                    <button
+                      onClick={() => saveFeedbackLocal(msg.text.slice(0, 80), false, "Unhelpful panel answer")}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#686868', display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, fontWeight: 700 }}
+                    >
+                      <ThumbsDown style={{ width: 10, height: 10 }} /> No
                     </button>
                   </div>
                 )}

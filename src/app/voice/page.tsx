@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { checkOllamaAvailability, OllamaStatus } from '@/lib/ollamaClient';
 import { parseVoiceNavigation, speakAudioResponse, stopAudioPlayback } from '@/lib/voiceAssistantHelper';
+import { saveVoiceQueryToFirebase } from '@/lib/firebase';
 
 export default function VoiceAssistantPage() {
   const router = useRouter();
@@ -144,16 +145,19 @@ export default function VoiceAssistantPage() {
         setAiVoiceResponse(textToSpeak);
         setStructuredData(data);
         setActiveModel(data.modelUsed || 'Ollama AI (Local)');
+        saveVoiceQueryToFirebase({ transcript: spokenText, response: textToSpeak });
         speakAudioResponse(textToSpeak, () => setIsSpeaking(true), () => setIsSpeaking(false));
       } else {
         const fallbackMsg = "IS 302-2-3:2017 specifies mandatory high voltage dielectric test, leakage current limits under 0.75mA, and power input verification for electric irons under Scheme-I ISI marking.";
         setAiVoiceResponse(fallbackMsg);
+        saveVoiceQueryToFirebase({ transcript: spokenText, response: fallbackMsg });
         speakAudioResponse(fallbackMsg, () => setIsSpeaking(true), () => setIsSpeaking(false));
       }
     } catch (error) {
       setIsLoading(false);
       const errReply = "Connected to BIS Grounded Database. Under IS 302-2-3, manufacturers must perform strict leakage current and creepage distance verification.";
       setAiVoiceResponse(errReply);
+      saveVoiceQueryToFirebase({ transcript: spokenText, response: errReply });
       speakAudioResponse(errReply, () => setIsSpeaking(true), () => setIsSpeaking(false));
     }
   };
@@ -164,7 +168,7 @@ export default function VoiceAssistantPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28, width: '100%' }}>
       
       {/* Header Banner */}
       <div className="bg-white border border-orange-200 rounded-xl p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
