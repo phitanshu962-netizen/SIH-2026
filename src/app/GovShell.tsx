@@ -304,24 +304,18 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           { href: '/testing-mapper', label: 'Testing Mapper', icon: TestTube, badge: activePersona === 'manufacturer' ? 'Lab Equipment' : undefined },
           { href: '/timeline', label: 'Compliance Roadmap', icon: Calendar, badge: activePersona === 'msme' ? 'MSME Roadmap' : undefined }
         ]
-      },
-      {
-        title: 'AI RESEARCH',
-        items: [
-          { href: '/assistant', label: 'Ask BIS AI Assistant', icon: Cpu }
-        ]
       }
     ];
 
     let priorityOrder: string[] = [];
     if (activePersona === 'manufacturer') {
-      priorityOrder = ['DASHBOARD', 'TOOLS & LABS', 'ANALYSIS', 'STANDARDS', 'COMPLIANCE', 'MONITORING', 'KNOWLEDGE', 'AI RESEARCH'];
+      priorityOrder = ['DASHBOARD', 'TOOLS & LABS', 'ANALYSIS', 'STANDARDS', 'COMPLIANCE', 'MONITORING', 'KNOWLEDGE'];
     } else if (activePersona === 'msme') {
-      priorityOrder = ['DASHBOARD', 'COMPLIANCE', 'TOOLS & LABS', 'STANDARDS', 'ANALYSIS', 'MONITORING', 'KNOWLEDGE', 'AI RESEARCH'];
+      priorityOrder = ['DASHBOARD', 'COMPLIANCE', 'TOOLS & LABS', 'STANDARDS', 'ANALYSIS', 'MONITORING', 'KNOWLEDGE'];
     } else if (activePersona === 'consumer') {
-      priorityOrder = ['DASHBOARD', 'MONITORING', 'STANDARDS', 'KNOWLEDGE', 'COMPLIANCE', 'ANALYSIS', 'TOOLS & LABS', 'AI RESEARCH'];
+      priorityOrder = ['DASHBOARD', 'MONITORING', 'STANDARDS', 'KNOWLEDGE', 'COMPLIANCE', 'ANALYSIS', 'TOOLS & LABS'];
     } else {
-      priorityOrder = ['DASHBOARD', 'MONITORING', 'COMPLIANCE', 'ANALYSIS', 'STANDARDS', 'KNOWLEDGE', 'TOOLS & LABS', 'AI RESEARCH'];
+      priorityOrder = ['DASHBOARD', 'MONITORING', 'COMPLIANCE', 'ANALYSIS', 'STANDARDS', 'KNOWLEDGE', 'TOOLS & LABS'];
     }
 
     return priorityOrder.map(title => baseSections.find(s => s.title === title)!);
