@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Shield, BookOpen, Search, CheckSquare, BarChart3, Globe, Users,
+  Shield, BookOpen, Search, CheckSquare, BarChart3, Globe, Users, User,
   FileSearch, GitCompare, HelpCircle, Bell, FileText, Mic, Calendar,
   TestTube, MapPin, CheckCircle2, Sparkles, LogOut, Command, ChevronLeft,
   ChevronRight, X, ArrowUpRight, Cpu, SlidersHorizontal, Home, ExternalLink, Volume2, VolumeX
@@ -425,7 +425,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
             
             {/* Persona Selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 6, padding: '3px 7px' }}>
+            <div suppressHydrationWarning style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 6, padding: '3px 7px' }}>
               <Users style={{ width: 12, height: 12, color: '#686868' }} />
               <select
                 value={persona}
@@ -442,12 +442,12 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
 
             {/* Language Selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Globe style={{ width: 12, height: 12, color: '#F28C52' }} />
+            <div suppressHydrationWarning style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 6, padding: '3px 7px' }}>
+              <Globe style={{ width: 12, height: 12, color: '#686868' }} />
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as LanguageCode)}
-                style={{ background: '#FFFFFF', color: '#242424', border: '1px solid #E8E2DC', borderRadius: 4, padding: '3px 6px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', outline: 'none' }}
+                style={{ background: 'transparent', border: 'none', fontSize: 11.5, fontWeight: 600, color: '#242424', cursor: 'pointer', outline: 'none' }}
               >
                 <option value="en">English</option>
                 <option value="hi">हिंदी</option>
@@ -462,6 +462,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             {/* Auth Button */}
             {user ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FFF1E8', border: '1px solid #F4C4A5', borderRadius: 6, padding: '3px 7px' }}>
+                <User style={{ width: 12, height: 12, color: '#E9783F' }} />
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: '#171717' }}>
                   {user.displayName || user.email?.split('@')[0]}
                 </span>
@@ -473,13 +474,14 @@ function ShellInner({ children }: { children: React.ReactNode }) {
               <button
                 onClick={signInWithGoogle}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
                   background: '#FFFFFF', color: '#242424',
                   border: '1px solid #E8E2DC', borderRadius: 6,
                   padding: '4px 9px', fontSize: 11.5, fontWeight: 700,
                   cursor: 'pointer', transition: 'all 0.15s'
                 }}
               >
+                <User style={{ width: 12, height: 12, color: '#686868' }} />
                 <span>Login</span>
               </button>
             )}
