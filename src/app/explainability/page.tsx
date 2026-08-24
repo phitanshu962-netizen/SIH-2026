@@ -71,7 +71,7 @@ function renderFormattedRationale(text: string) {
 export default function LegalTreeRationalePage() {
   const [standardsList, setStandardsList] = useState<BISStandard[]>(() => getDynamicStandards());
   const [selectedStandardId, setSelectedStandardId] = useState<string>('is-302-2-3');
-  const [inputMode, setInputMode] = useState<'standard' | 'product'>('standard');
+  const [inputMode, setInputMode] = useState<'standard' | 'product' | 'exemption'>('standard');
   const [viewMode, setViewMode] = useState<'simple' | 'engineer' | 'legal'>('engineer');
   
   // Custom Product Inputs for "Trace My Product"
@@ -80,6 +80,12 @@ export default function LegalTreeRationalePage() {
   const [usageInput, setUsageInput] = useState<string>('Household');
   const [voltageInput, setVoltageInput] = useState<string>('230V 1-Phase');
   const [scaleInput, setScaleInput] = useState<string>('MSME Domestic');
+
+  // Statutory Customs Exemption Checker State
+  const [exemptionPurpose, setExemptionPurpose] = useState<'rnd_prototype' | 'export_eou' | 'spare_parts' | 'personal' | 'domestic_sale'>('rnd_prototype');
+  const [exemptionQuantity, setExemptionQuantity] = useState<number>(5);
+  const [exemptionDocType, setExemptionDocType] = useState<string>('In-House R&D Test Plan & Undertaking');
+  const [copiedExemptionLetter, setCopiedExemptionLetter] = useState<boolean>(false);
 
   // Smart Product Interview State
   const [showInterviewModal, setShowInterviewModal] = useState<boolean>(false);
@@ -457,6 +463,21 @@ export default function LegalTreeRationalePage() {
             <Building2 style={{ width: 15, height: 15, color: inputMode === 'product' ? '#F28C52' : '#686868' }} />
             <span>Tab 2: Trace My Product</span>
           </button>
+
+          <button
+            onClick={() => setInputMode('exemption')}
+            style={{
+              background: inputMode === 'exemption' ? '#FFF1E8' : 'transparent',
+              color: inputMode === 'exemption' ? '#171717' : '#686868',
+              border: `1px solid ${inputMode === 'exemption' ? '#F4C4A5' : 'transparent'}`,
+              borderLeft: inputMode === 'exemption' ? '3px solid #F28C52' : 'transparent',
+              borderRadius: 6, padding: '6px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 8
+            }}
+          >
+            <Shield style={{ width: 15, height: 15, color: inputMode === 'exemption' ? '#F28C52' : '#686868' }} />
+            <span>Tab 3: Statutory Exemption Checker</span>
+          </button>
         </div>
 
         {/* Tab 1 Content: Trace a Standard Dropdown + Horizontal Pills */}
@@ -574,6 +595,142 @@ export default function LegalTreeRationalePage() {
                 Start Legal Tree Reasoning
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Tab 3 Content: Statutory Customs Exemption Checker */}
+        {inputMode === 'exemption' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11.5, fontWeight: 700, color: '#686868', display: 'block', marginBottom: 4 }}>
+                  Purpose of Import / Production
+                </label>
+                <select
+                  value={exemptionPurpose}
+                  onChange={(e) => setExemptionPurpose(e.target.value as any)}
+                  style={{ width: '100%', background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 6, padding: '8px 10px', fontSize: 12.5, fontWeight: 600, color: '#242424', outline: 'none' }}
+                >
+                  <option value="rnd_prototype">R&amp;D / Laboratory Prototype Testing (&lt; 20 units)</option>
+                  <option value="export_eou">100% Export-Oriented Manufacturing (EOU / SEZ)</option>
+                  <option value="spare_parts">OEM Spare Parts / Repair Component Input</option>
+                  <option value="personal">Personal Unaccompanied Baggage (1 Unit)</option>
+                  <option value="domestic_sale">Domestic Commercial Sale in Indian Market</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 11.5, fontWeight: 700, color: '#686868', display: 'block', marginBottom: 4 }}>
+                  Batch Import / Manufacturing Quantity (Units)
+                </label>
+                <input
+                  type="number"
+                  value={exemptionQuantity}
+                  onChange={(e) => setExemptionQuantity(Math.max(1, Number(e.target.value)))}
+                  style={{ width: '100%', background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 6, padding: '8px 10px', fontSize: 12.5, fontWeight: 600, color: '#242424', outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 11.5, fontWeight: 700, color: '#686868', display: 'block', marginBottom: 4 }}>
+                  Supporting Customs Documentation
+                </label>
+                <select
+                  value={exemptionDocType}
+                  onChange={(e) => setExemptionDocType(e.target.value)}
+                  style={{ width: '100%', background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 6, padding: '8px 10px', fontSize: 12.5, fontWeight: 600, color: '#242424', outline: 'none' }}
+                >
+                  <option value="In-House R&D Test Plan & Undertaking">In-House R&amp;D Test Plan &amp; Non-Commercial Undertaking</option>
+                  <option value="EOU / SEZ Export Order Letter of Credit">EOU / SEZ Export Order Letter of Credit</option>
+                  <option value="OEM Repair Service Contract Proof">OEM Repair Service Contract Proof</option>
+                  <option value="Commercial Invoice Only">Commercial Invoice Only</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Exemption Evaluation Verdict Card */}
+            {(() => {
+              const isRndEligible = exemptionPurpose === 'rnd_prototype' && exemptionQuantity <= 20;
+              const isExportEligible = exemptionPurpose === 'export_eou';
+              const isSpareEligible = exemptionPurpose === 'spare_parts';
+              const isPersonalEligible = exemptionPurpose === 'personal' && exemptionQuantity === 1;
+              const isEligible = isRndEligible || isExportEligible || isSpareEligible || isPersonalEligible;
+
+              const gazetteCitation = isRndEligible
+                ? "Customs Circular No. 22/2020 & DPIIT QCO Exemption Clause 5(c) (Max 20 Units for Testing)"
+                : isExportEligible
+                ? "Bureau of Indian Standards Act 2016, Section 14(3) (Exemption for 100% Export Consignments)"
+                : isSpareEligible
+                ? "Customs Notification No. 19/2022-Customs (End-use Spare Parts for Servicing Certified Machines)"
+                : isPersonalEligible
+                ? "Foreign Trade Policy 2023, Para 2.07 (Personal Baggage Exemption)"
+                : "Mandatory QCO Enforced: No Exemption Available for Domestic Retail Sales or Excessive Quantities.";
+
+              const declarationLetter = `[STATUTORY CUSTOMS EXEMPTION DECLARATION]
+To,
+The Assistant Commissioner of Customs,
+Air Cargo / Sea Port Complex.
+
+Subject: Declaration for Statutory Exemption from Mandatory BIS Quality Control Order under ${gazetteCitation.split('&')[0].trim()}
+
+1. We hereby declare that the imported consignment consisting of ${exemptionQuantity} units of ${treeData.standard.title.split('-')[0]} under HSN ${treeData.standard.hsnCodes?.[0] || '8516.40'} is strictly for "${exemptionPurpose.replace('_', ' ').toUpperCase()}" purposes.
+2. Under statutory provisions of ${gazetteCitation}, these units will NOT be sold, displayed, or transferred into the domestic commercial retail market in India.
+3. Supporting Document Attached: ${exemptionDocType}.
+
+Authorized Signatory / Importer Undertaking`;
+
+              return (
+                <div style={{
+                  background: isEligible ? '#F8FCF9' : '#FDF2F0',
+                  border: isEligible ? '1px solid #B5D5BF' : '1px solid #F8D7DA',
+                  borderRadius: 8, padding: 18, display: 'flex', flexDirection: 'column', gap: 12
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {isEligible ? (
+                        <span style={{ fontSize: 12, fontWeight: 800, background: '#EBF4EE', color: '#4F7D5A', padding: '3px 10px', borderRadius: 4 }}>
+                          ✅ 100% STATUTORILY EXEMPT FROM BIS MANDATORY ORDER
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, fontWeight: 800, background: '#FDF2F0', color: '#B85C52', padding: '3px 10px', borderRadius: 4 }}>
+                          ❌ NOT EXEMPT • MANDATORY BIS ISI / CRS CERTIFICATION REQUIRED
+                        </span>
+                      )}
+                    </div>
+
+                    {isEligible && (
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(declarationLetter);
+                          setCopiedExemptionLetter(true);
+                          setTimeout(() => setCopiedExemptionLetter(false), 2500);
+                        }}
+                        style={{
+                          background: copiedExemptionLetter ? '#4F7D5A' : '#F28C52',
+                          color: '#FFFFFF', border: 'none', borderRadius: 6,
+                          padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 6
+                        }}
+                      >
+                        {copiedExemptionLetter ? <Check style={{ width: 14, height: 14 }} /> : <FileText style={{ width: 14, height: 14 }} />}
+                        <span>{copiedExemptionLetter ? 'Declaration Copied!' : 'Copy Customs Exemption Statement'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#171717' }}>
+                    Legal Authority &amp; Statutory Grounding:
+                  </div>
+                  <p style={{ fontSize: 12.5, color: '#524F4D', margin: 0, lineHeight: 1.5 }}>
+                    {gazetteCitation}
+                  </p>
+
+                  <div style={{ fontSize: 11.5, color: '#686868', borderTop: '1px solid #E8E2DC', paddingTop: 8 }}>
+                    <strong>Statutory Compliance Requirement:</strong> {isEligible ? 'Submit non-commercial end-use undertaking with Bill of Entry to Customs Appraising Officer to clear consignment without BIS CML/R-number.' : 'You must obtain formal BIS license on Manakonline or submit NABL test reports prior to customs clearance.'}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

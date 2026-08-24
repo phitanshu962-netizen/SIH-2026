@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import './globals.css';
 import GovShell from './GovShell';
 
@@ -27,24 +28,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700;800&family=Noto+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap"
           rel="stylesheet"
         />
-        <script
-          type="text/javascript"
-          src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"
-          async
-        ></script>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              function googleTranslateElementInit() {
-                new google.translate.TranslateElement({
-                  pageLanguage: 'en',
-                  includedLanguages: 'en,hi,mr,gu,ta,te,bn',
-                  autoDisplay: false
-                }, 'google_translate_element');
-              }
-            `,
-          }}
-        />
       </head>
       <body
         suppressHydrationWarning
@@ -59,6 +42,28 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         <GovShell>{children}</GovShell>
+        <Script
+          id="google-translate-init"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.googleTranslateElementInit = function() {
+                if (window.google && window.google.translate) {
+                  new window.google.translate.TranslateElement({
+                    pageLanguage: 'en',
+                    includedLanguages: 'en,hi,mr,gu,ta,te,bn',
+                    autoDisplay: false
+                  }, 'google_translate_element');
+                }
+              };
+            `,
+          }}
+        />
+        <Script
+          id="google-translate-script"
+          src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );

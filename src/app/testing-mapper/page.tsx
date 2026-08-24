@@ -418,30 +418,104 @@ export default function TestingMapperPage() {
           </div>
         )}
 
-        {/* ══════════════ TAB 3: EQUIPMENT & CALIBRATION MATRIX ══════════════ */}
+        {/* ══════════════ TAB 3: EQUIPMENT & CALIBRATION MATRIX (CAPEX ANALYZER) ══════════════ */}
         {activeTab === 'equipment' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: '#171717', margin: '0 0 4px' }}>Equipment Reuse &amp; Calibration Expiry Tracker</h3>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: '#171717', margin: '0 0 4px' }}>
+                Equipment Procurement Cost &amp; In-House Lab Capex Analyzer
+              </h3>
               <p style={{ fontSize: 12.5, color: '#686868', margin: 0 }}>
-                Calculates laboratory instrument reuse across multiple test clauses and alerts when calibration certificates pass expiration dates.
+                Calculates laboratory instrument reuse, estimated equipment procurement capital expenditure (Capex), calibration intervals, and ROI break-even versus outsourced NABL testing.
               </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
-              {Object.entries(equipmentReuseMap).map(([eqName, count], idx) => (
-                <div key={idx} style={{ background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: '#F28C52', textTransform: 'uppercase' }}>1 RENDER &rarr; {count} TESTS</span>
-                    <span style={{ fontSize: 10, background: idx === 1 ? '#FEF7ED' : '#EBF4EE', color: idx === 1 ? '#C88732' : '#4F7D5A', fontWeight: 800, padding: '1px 6px', borderRadius: 4 }}>
-                      {idx === 1 ? 'CALIBRATION DUE' : 'VALID'}
+            {/* In-House Lab Capex Summary Banner */}
+            {(() => {
+              const distinctEquipmentList = Array.from(new Set(mappings.map(m => m.requiredEquipment)));
+              const totalEstimatedCapex = distinctEquipmentList.reduce((acc, eqName) => {
+                const match = mappings.find(m => m.requiredEquipment === eqName);
+                return acc + (match?.equipmentDetails?.estimatedCapexInr || 45000);
+              }, 0);
+              const avgOutsourceCostPerBatch = 45000;
+              const breakEvenBatches = Math.max(2, Math.ceil(totalEstimatedCapex / avgOutsourceCostPerBatch));
+
+              return (
+                <div style={{ background: '#FFF1E8', border: '1px solid #F4C4A5', borderRadius: 10, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Scale style={{ width: 18, height: 18, color: '#E9783F' }} />
+                      <span style={{ fontSize: 13.5, fontWeight: 800, color: '#171717' }}>
+                        In-House Laboratory Setup Capex Budget: {selectedStandard.isNumber}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 800, background: '#EBF4EE', color: '#4F7D5A', padding: '3px 8px', borderRadius: 4 }}>
+                      ROI Break-Even: ~{breakEvenBatches} Production Batches
                     </span>
                   </div>
 
-                  <h4 style={{ fontSize: 14, fontWeight: 800, color: '#171717', margin: 0 }}>{eqName}</h4>
-                  <p style={{ fontSize: 11.5, color: '#686868', margin: 0 }}>Supports {count} mapped standard clause requirements for {selectedStandard.isNumber}.</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                    <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 6, padding: 12 }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#686868', textTransform: 'uppercase' }}>ESTIMATED TOTAL CAPEX</span>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: '#171717', marginTop: 2 }}>
+                        ₹{totalEstimatedCapex.toLocaleString()}
+                      </div>
+                      <span style={{ fontSize: 11, color: '#686868' }}>For {distinctEquipmentList.length} distinct instruments</span>
+                    </div>
+
+                    <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 6, padding: 12 }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#686868', textTransform: 'uppercase' }}>ANNUAL CALIBRATION OPEX</span>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: '#171717', marginTop: 2 }}>
+                        ~₹{Math.round(totalEstimatedCapex * 0.08).toLocaleString()} / yr
+                      </div>
+                      <span style={{ fontSize: 11, color: '#686868' }}>NABL traceable recalibration</span>
+                    </div>
+
+                    <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 6, padding: 12 }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#686868', textTransform: 'uppercase' }}>3RD-PARTY NABL PER BATCH</span>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: '#E9783F', marginTop: 2 }}>
+                        ~₹{avgOutsourceCostPerBatch.toLocaleString()} / test
+                      </div>
+                      <span style={{ fontSize: 11, color: '#686868' }}>External turn-around: 15-20 days</span>
+                    </div>
+                  </div>
                 </div>
-              ))}
+              );
+            })()}
+
+            {/* Itemized Equipment Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+              {Object.entries(equipmentReuseMap).map(([eqName, count], idx) => {
+                const sampleMapping = mappings.find(m => m.requiredEquipment === eqName);
+                const cost = sampleMapping?.equipmentDetails?.estimatedCost || '₹45,000 - ₹85,000';
+                const calCert = sampleMapping?.equipmentDetails?.calibrationCertId || 'CAL-STD-2024';
+
+                return (
+                  <div key={idx} style={{ background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: '#F28C52', textTransform: 'uppercase' }}>1 RENDER &rarr; {count} TESTS</span>
+                      <span style={{ fontSize: 10, background: idx === 1 ? '#FEF7ED' : '#EBF4EE', color: idx === 1 ? '#C88732' : '#4F7D5A', fontWeight: 800, padding: '1px 6px', borderRadius: 4 }}>
+                        {idx === 1 ? 'CALIBRATION DUE' : 'VALID'}
+                      </span>
+                    </div>
+
+                    <h4 style={{ fontSize: 14, fontWeight: 800, color: '#171717', margin: 0 }}>{eqName}</h4>
+                    
+                    <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 6, padding: '8px 12px', fontSize: 11.5 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                        <span style={{ color: '#686868' }}>Estimated Procurement Cost:</span>
+                        <strong style={{ color: '#171717' }}>{cost}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#686868' }}>Calibration Cert / Period:</span>
+                        <span style={{ color: '#4F7D5A', fontWeight: 600 }}>{calCert} (12 Mo)</span>
+                      </div>
+                    </div>
+
+                    <p style={{ fontSize: 11.5, color: '#686868', margin: 0 }}>Supports {count} mapped standard clause requirements for {selectedStandard.isNumber}.</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

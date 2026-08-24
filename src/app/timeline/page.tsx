@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { 
   Calendar, Clock, CheckCircle2, ArrowRight, Shield, Download, 
-  Building2, ChevronRight, Layers, FileText
+  Building2, ChevronRight, Layers, FileText, Sparkles, Rocket
 } from 'lucide-react';
 import { getTimelineMilestones } from '@/lib/data/bisDatabase';
 
@@ -12,45 +12,94 @@ export default function ComplianceTimelinePage() {
   const milestones = getTimelineMilestones();
   const [scheme, setScheme] = useState<string>('Scheme-I (ISI Mark)');
   const [unitType, setUnitType] = useState<string>('Domestic MSME Unit');
+  
+  // Interactive Start Date Picker State (Defaults to Today)
+  const [startDate, setStartDate] = useState<string>(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
 
   const totalDays = milestones.reduce((sum, m) => sum + m.durationDays, 0);
 
+  // Calculate Cumulative Milestone Dates
+  const baseStart = new Date(startDate || Date.now());
+  let runningDays = 0;
+
+  const milestonesWithDates = milestones.map((m) => {
+    const stageStart = new Date(baseStart.getTime() + runningDays * 24 * 60 * 60 * 1000);
+    runningDays += m.durationDays;
+    const stageEnd = new Date(baseStart.getTime() + runningDays * 24 * 60 * 60 * 1000);
+
+    return {
+      ...m,
+      formattedStart: stageStart.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
+      formattedEnd: stageEnd.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    };
+  });
+
+  const finalLaunchDate = new Date(baseStart.getTime() + runningDays * 24 * 60 * 60 * 1000);
+  const formattedFinalLaunchDate = finalLaunchDate.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, width: '100%' }}>
       
       {/* Top Banner */}
-      <div className="bg-white border border-orange-200 rounded-xl p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(40,30,20,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <div className="flex items-center space-x-2">
-            <span className="bg-orange-100 text-orange-800 text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
-              BIS License SLA
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ background: '#FFF1E8', color: '#E9783F', fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 800, textTransform: 'uppercase' }}>
+              BIS License SLA &amp; Roadmap
             </span>
-            <span className="text-slate-500 text-xs font-semibold">Interactive Milestone & SLA Gantt Engine</span>
+            <span style={{ color: '#686868', fontSize: 12, fontWeight: 600 }}>Interactive Milestone &amp; Launch Date Engine</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1 text-slate-900">
-            BIS Compliance Roadmap & Timeline Generator
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#171717', margin: '6px 0 2px' }}>
+            BIS Compliance Roadmap &amp; Market Launch Calculator
           </h1>
-          <p className="text-slate-600 text-xs sm:text-sm mt-1 max-w-2xl font-medium">
-            Generate customized step-by-step milestone timelines for your ISI mark or CRS application. Track official government SLAs and deliverable deadlines.
+          <p style={{ fontSize: 13, color: '#686868', margin: 0, maxWidth: 760 }}>
+            Generate customized step-by-step milestone timelines for your ISI mark or CRS application. Pick your project start date to compute projected milestone deadlines and final market launch date.
           </p>
         </div>
-        <div className="flex space-x-2">
-          <Link href="/testing-mapper" className="bg-orange-600 hover:bg-orange-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow-sm">
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link href="/testing-mapper" style={{ background: '#F28C52', color: '#FFFFFF', padding: '8px 16px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span>Testing Mapper</span>
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight style={{ width: 14, height: 14 }} />
           </Link>
         </div>
       </div>
 
-      {/* Control Bar */}
-      <div className="bg-white p-5 rounded-xl border border-orange-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
+      {/* ══════════════ 1. CONTROL BAR & INTERACTIVE DATE PICKER ══════════════ */}
+      <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(40,30,20,0.03)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+          
+          {/* Interactive Start Date Picker */}
           <div>
-            <label className="text-[11px] font-extrabold uppercase text-slate-500 block">BIS Scheme</label>
+            <label style={{ display: 'block', fontSize: 11.5, fontWeight: 800, color: '#E9783F', textTransform: 'uppercase', marginBottom: 4 }}>
+              📅 Application / Project Start Date
+            </label>
+            <input 
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{
+                width: '100%', padding: '8px 12px', background: '#FFFCF8', border: '1.5px solid #F28C52',
+                borderRadius: 6, fontSize: 13, fontWeight: 700, color: '#171717', outline: 'none'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 11.5, fontWeight: 800, color: '#686868', textTransform: 'uppercase', marginBottom: 4 }}>
+              BIS Certification Scheme
+            </label>
             <select 
               value={scheme} 
               onChange={(e) => setScheme(e.target.value)}
-              className="bg-orange-50/50 border border-orange-200 text-slate-900 text-xs font-bold rounded-lg p-2 mt-0.5"
+              style={{ width: '100%', padding: '8px 12px', background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 6, fontSize: 12.5, color: '#242424', outline: 'none' }}
             >
               <option value="Scheme-I (ISI Mark)">Scheme-I (ISI Mark Standard)</option>
               <option value="CRS (Compulsory Registration)">CRS Electronics Registration</option>
@@ -59,68 +108,127 @@ export default function ComplianceTimelinePage() {
           </div>
 
           <div>
-            <label className="text-[11px] font-extrabold uppercase text-slate-500 block">Unit Type</label>
+            <label style={{ display: 'block', fontSize: 11.5, fontWeight: 800, color: '#686868', textTransform: 'uppercase', marginBottom: 4 }}>
+              Manufacturing Scale
+            </label>
             <select 
               value={unitType} 
               onChange={(e) => setUnitType(e.target.value)}
-              className="bg-orange-50/50 border border-orange-200 text-slate-900 text-xs font-bold rounded-lg p-2 mt-0.5"
+              style={{ width: '100%', padding: '8px 12px', background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 6, fontSize: 12.5, color: '#242424', outline: 'none' }}
             >
-              <option value="Domestic MSME Unit">Domestic MSME Unit</option>
+              <option value="Domestic MSME Unit">Domestic MSME Unit (Priority Fast-Track)</option>
               <option value="Large Manufacturing Plant">Large Manufacturing Plant</option>
-              <option value="Overseas Unit">Overseas Unit</option>
+              <option value="Overseas Unit">Overseas Factory (FMCS)</option>
             </select>
           </div>
+
         </div>
 
-        {/* Total Estimated SLA Box */}
-        <div className="bg-orange-50 border border-orange-200 p-3 rounded-xl flex items-center space-x-3 text-orange-900">
-          <Clock className="w-6 h-6 text-orange-600 flex-shrink-0" />
-          <div>
-            <span className="text-[10px] font-extrabold uppercase text-orange-700 block">Total Estimated Time</span>
-            <span className="text-base font-black">{totalDays} Calendar Days (~{Math.round(totalDays/30 * 10)/10} Months)</span>
+        {/* Calculated Launch Date KPI Banner */}
+        <div style={{ background: '#FFF1E8', border: '1px solid #F4C4A5', borderRadius: 8, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#F28C52', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Rocket style={{ width: 22, height: 22 }} />
+            </div>
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#E9783F', textTransform: 'uppercase' }}>
+                CALCULATED COMMERCIAL MARKET LAUNCH DATE
+              </span>
+              <div style={{ fontSize: 19, fontWeight: 900, color: '#171717' }}>
+                {formattedFinalLaunchDate}
+              </div>
+              <span style={{ fontSize: 11.5, color: '#686868' }}>
+                Total Duration: <strong>{totalDays} Calendar Days (~{Math.round(totalDays/30 * 10)/10} Months)</strong> from selected start date
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => {
+                const d = new Date();
+                setStartDate(d.toISOString().split('T')[0]);
+              }}
+              style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 4, padding: '4px 10px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => {
+                const d = new Date();
+                d.setDate(d.getDate() + 7);
+                setStartDate(d.toISOString().split('T')[0]);
+              }}
+              style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 4, padding: '4px 10px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+            >
+              +1 Week
+            </button>
+            <button
+              onClick={() => {
+                const d = new Date();
+                d.setMonth(d.getMonth() + 1, 1);
+                setStartDate(d.toISOString().split('T')[0]);
+              }}
+              style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 4, padding: '4px 10px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+            >
+              1st Next Month
+            </button>
           </div>
         </div>
+
       </div>
 
-      {/* Milestone Timeline Flow */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-            <Calendar className="w-4 h-4 text-orange-600" />
-            <span>Step-by-Step License Acquisition Roadmap</span>
+      {/* ══════════════ 2. MILESTONE ROADMAP WITH CALCULATED DATES ══════════════ */}
+      <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(40,30,20,0.03)', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E8E2DC', paddingBottom: 12 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 800, color: '#171717', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Calendar style={{ width: 16, height: 16, color: '#F28C52' }} />
+            <span>Step-by-Step License Acquisition Roadmap (Dates Grounded)</span>
           </h2>
-          <button className="bg-orange-600 hover:bg-orange-700 text-white text-xs px-3.5 py-1.5 rounded-lg font-bold flex items-center space-x-1 shadow-sm">
-            <Download className="w-3.5 h-3.5" />
+          <button
+            onClick={() => window.print()}
+            style={{ background: '#F28C52', color: '#FFFFFF', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <Download style={{ width: 13, height: 13 }} />
             <span>Download Timeline PDF</span>
           </button>
         </div>
 
-        <div className="space-y-6 relative before:absolute before:inset-0 before:left-6 before:w-0.5 before:bg-orange-200">
-          {milestones.map(m => (
-            <div key={m.stage} className="relative flex items-start space-x-4 group">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'relative' }}>
+          {milestonesWithDates.map((m) => (
+            <div key={m.stage} style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
               
               {/* Step circle */}
-              <div className="w-12 h-12 rounded-full bg-orange-600 text-white font-black text-sm flex items-center justify-center flex-shrink-0 z-10 shadow-md group-hover:scale-110 transition-transform">
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#F28C52', color: '#FFFFFF', fontWeight: 800, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 {m.stage}
               </div>
 
               {/* Card content */}
-              <div className="flex-1 bg-slate-50 border border-slate-200 p-5 rounded-xl space-y-2 group-hover:border-orange-300 transition">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">{m.title}</h3>
-                  <span className="bg-orange-100 text-orange-900 text-xs font-black px-2.5 py-0.5 rounded-full w-fit">
-                    SLA: {m.durationDays} Days
-                  </span>
+              <div style={{ flex: 1, background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 8, padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 800, color: '#171717', margin: 0 }}>{m.title}</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#4F7D5A', background: '#EBF4EE', padding: '2px 8px', borderRadius: 4 }}>
+                      📅 {m.formattedStart} &rarr; {m.formattedEnd}
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#E9783F', background: '#FFF1E8', padding: '2px 8px', borderRadius: 4 }}>
+                      SLA: {m.durationDays} Days
+                    </span>
+                  </div>
                 </div>
 
-                <p className="text-xs text-slate-600 leading-relaxed font-medium">{m.description}</p>
+                <p style={{ fontSize: 12.5, color: '#524F4D', margin: 0, lineHeight: 1.5 }}>
+                  {m.description}
+                </p>
 
-                <div className="pt-2">
-                  <span className="text-[10px] font-extrabold uppercase text-slate-500 block mb-1">Required Deliverables:</span>
-                  <div className="flex flex-wrap gap-1.5">
+                <div style={{ borderTop: '1px solid #E8E2DC', paddingTop: 8 }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', color: '#686868', display: 'block', marginBottom: 4 }}>
+                    Required Deliverables:
+                  </span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {m.deliverables.map((del: string, i: number) => (
-                      <span key={i} className="bg-white border border-slate-300 text-slate-800 text-[11px] font-bold px-2 py-0.5 rounded flex items-center space-x-1">
-                        <CheckCircle2 className="w-3 h-3 text-orange-600" />
+                      <span key={i} style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600, color: '#242424', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <CheckCircle2 style={{ width: 11, height: 11, color: '#4F7D5A' }} />
                         <span>{del}</span>
                       </span>
                     ))}
