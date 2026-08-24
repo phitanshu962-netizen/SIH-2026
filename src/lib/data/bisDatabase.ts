@@ -9,7 +9,51 @@ import {
 
 // Dynamic Knowledge Base Engine supporting live additions, document ingestion, and runtime vector storage
 
-let dynamicStandardsStore: BISStandard[] = [
+const inMemoryDeletedStandards = new Set<string>();
+
+// Preload local tombstones immediately if in browser
+if (typeof window !== 'undefined') {
+  try {
+    const stored: string[] = JSON.parse(localStorage.getItem('bis_deleted_standards') || '[]');
+    stored.forEach(item => {
+      if (item) {
+        inMemoryDeletedStandards.add(item);
+        inMemoryDeletedStandards.add(item.toLowerCase());
+        inMemoryDeletedStandards.add(item.replace(/[\s:_()-]/g, '').toLowerCase());
+      }
+    });
+  } catch (e) {}
+}
+
+export function isDeletedStandard(id: string, isNumber?: string): boolean {
+  if (!id && !isNumber) return false;
+  const testIds = [id, isNumber].filter(Boolean) as string[];
+
+  for (const t of testIds) {
+    const clean = t.trim().toLowerCase();
+    const numClean = clean.replace(/[\s:_()-]/g, '');
+
+    if (inMemoryDeletedStandards.has(t) || inMemoryDeletedStandards.has(clean) || inMemoryDeletedStandards.has(numClean)) {
+      return true;
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored: string[] = JSON.parse(localStorage.getItem('bis_deleted_standards') || '[]');
+      for (const t of testIds) {
+        const clean = t.trim().toLowerCase();
+        const numClean = clean.replace(/[\s:_()-]/g, '');
+        if (stored.some(s => s === t || s.toLowerCase() === clean || s.replace(/[\s:_()-]/g, '').toLowerCase() === numClean)) {
+          return true;
+        }
+      }
+    } catch (e) {}
+  }
+  return false;
+}
+
+export const builtInFallbackStandards: BISStandard[] = [
   {
     id: "is-302-2-3",
     isNumber: "IS 302-2-3:2017",
@@ -645,24 +689,42 @@ let dynamicStandardsStore: BISStandard[] = [
   }
 ];
 
+export const bisStandardsDatabase: BISStandard[] = builtInFallbackStandards;
+
+let dynamicStandardsStore: BISStandard[] = builtInFallbackStandards.filter(
+  s => !isDeletedStandard(s.id, s.isNumber)
+);
+
 export function getDynamicStandards(): BISStandard[] {
-  return dynamicStandardsStore;
+  return dynamicStandardsStore.filter(s => !isDeletedStandard(s.id, s.isNumber));
 }
 
 export function setDynamicStandardsStore(standards: BISStandard[]): void {
-  dynamicStandardsStore = standards;
+  dynamicStandardsStore = standards.filter(s => !isDeletedStandard(s.id, s.isNumber));
   if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem('bis_dynamic_standards', JSON.stringify(standards));
-      window.dispatchEvent(new CustomEvent('bis_standards_updated', { detail: { count: standards.length } }));
-    } catch (e) {
-      console.warn("Could not save bis_dynamic_standards to localStorage", e);
-    }
+    window.dispatchEvent(new CustomEvent('bis_standards_updated', { detail: { count: dynamicStandardsStore.length } }));
   }
 }
 
 export function addDynamicStandard(standard: BISStandard): void {
-  const current = getDynamicStandards();
+  const stdId = standard.id;
+  const stdNum = standard.isNumber;
+  inMemoryDeletedStandards.delete(stdId);
+  inMemoryDeletedStandards.delete(stdId.toLowerCase());
+  if (stdNum) {
+    inMemoryDeletedStandards.delete(stdNum);
+    inMemoryDeletedStandards.delete(stdNum.toLowerCase());
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored: string[] = JSON.parse(localStorage.getItem('bis_deleted_standards') || '[]');
+      const filtered = stored.filter(s => s !== stdId && s !== stdId.toLowerCase() && s !== stdNum && s !== stdNum?.toLowerCase());
+      localStorage.setItem('bis_deleted_standards', JSON.stringify(filtered));
+    } catch (e) {}
+  }
+
+  const current = [...dynamicStandardsStore].filter(s => !isDeletedStandard(s.id, s.isNumber));
   const existingIdx = current.findIndex(
     s => s.id === standard.id || s.isNumber.trim().toLowerCase() === standard.isNumber.trim().toLowerCase()
   );
@@ -676,22 +738,66 @@ export function addDynamicStandard(standard: BISStandard): void {
   dynamicStandardsStore = current;
   
   if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem('bis_dynamic_standards', JSON.stringify(current));
-      
-      const customList = JSON.parse(localStorage.getItem('bis_custom_standards') || '[]');
-      const cIdx = customList.findIndex((s: any) => s.id === standard.id || s.isNumber === standard.isNumber);
-      if (cIdx >= 0) {
-        customList[cIdx] = standard;
-      } else {
-        customList.unshift(standard);
-      }
-      localStorage.setItem('bis_custom_standards', JSON.stringify(customList));
+    window.dispatchEvent(new CustomEvent('bis_standards_updated', { detail: { count: current.length, standard } }));
+  }
+}
 
-      window.dispatchEvent(new CustomEvent('bis_standards_updated', { detail: { count: current.length, standard } }));
-    } catch (e) {
-      console.warn("Could not persist custom standard to localStorage", e);
-    }
+export function updateDynamicStandard(standard: BISStandard): void {
+  const stdId = standard.id;
+  const stdNum = standard.isNumber;
+  inMemoryDeletedStandards.delete(stdId);
+  inMemoryDeletedStandards.delete(stdId.toLowerCase());
+  if (stdNum) {
+    inMemoryDeletedStandards.delete(stdNum);
+    inMemoryDeletedStandards.delete(stdNum.toLowerCase());
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored: string[] = JSON.parse(localStorage.getItem('bis_deleted_standards') || '[]');
+      const filtered = stored.filter(s => s !== stdId && s !== stdId.toLowerCase() && s !== stdNum && s !== stdNum?.toLowerCase());
+      localStorage.setItem('bis_deleted_standards', JSON.stringify(filtered));
+    } catch (e) {}
+  }
+
+  const current = [...dynamicStandardsStore];
+  const existingIdx = current.findIndex(
+    s => s.id === standard.id || s.isNumber.trim().toLowerCase() === standard.isNumber.trim().toLowerCase()
+  );
+  
+  if (existingIdx >= 0) {
+    current[existingIdx] = standard;
+  } else {
+    current.unshift(standard);
+  }
+  
+  dynamicStandardsStore = current;
+  
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('bis_standards_updated', { detail: { count: dynamicStandardsStore.length, standard } }));
+  }
+}
+
+export function removeDynamicStandard(idOrIsNumber: string): void {
+  if (!idOrIsNumber) return;
+  const target = idOrIsNumber.trim().toLowerCase();
+  inMemoryDeletedStandards.add(idOrIsNumber);
+  inMemoryDeletedStandards.add(target);
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored: string[] = JSON.parse(localStorage.getItem('bis_deleted_standards') || '[]');
+      if (!stored.includes(idOrIsNumber)) stored.push(idOrIsNumber);
+      if (!stored.includes(target)) stored.push(target);
+      localStorage.setItem('bis_deleted_standards', JSON.stringify(stored));
+    } catch (e) {}
+  }
+
+  dynamicStandardsStore = dynamicStandardsStore.filter(
+    s => s.id !== idOrIsNumber && s.id.toLowerCase() !== target && s.isNumber.trim().toLowerCase() !== target
+  );
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('bis_standards_updated', { detail: { count: dynamicStandardsStore.length } }));
   }
 }
 
@@ -731,12 +837,15 @@ export function parseBisDocumentContent(fileName: string, rawText: string): BISS
     }
   }
 
-  // 2. Extract IS Number (e.g. "IS 302-2-3", "IS 15298 (Part 2)", "IS 4151:2020")
+  // 2. Extract IS Number from Markdown / Text
   let isNumber = "";
+  const mdIsMatch = rawText.match(/^#\s*(IS\s*[^:\n\r#]+)/im);
   const isMatchInText = rawText.match(/\b(IS\s*(?:\/IEC\s*)?\d+(?:[\s\-/]*(?:Part|Sec|Section)\s*[\d/]+)?(?:[\s\-/]*\d+)?(?:\s*:\s*\d{4})?)\b/i);
   const isMatchInName = cleanName.match(/\b(IS\s*\d+[\d\s\-/]*)/i);
 
-  if (isMatchInText) {
+  if (mdIsMatch && mdIsMatch[1]) {
+    isNumber = mdIsMatch[1].trim().replace(/\s+/g, ' ').toUpperCase();
+  } else if (isMatchInText) {
     isNumber = isMatchInText[1].replace(/\s+/g, ' ').toUpperCase();
     if (!isNumber.includes(':')) {
       const yearMatch = rawText.match(/:\s*(19\d\d|20\d\d)/);
@@ -751,24 +860,32 @@ export function parseBisDocumentContent(fileName: string, rawText: string): BISS
 
   // 3. Extract Document Title
   let title = "";
-  const titlePatterns = [
-    /Indian Standard\s*\n+([^\n\r]{10,120})/i,
-    /Indian Standard\s*[-–—:]\s*([^\n\r]{10,120})/i,
-    /(?:Specification|Requirements)\s+for\s+([^\n\r]{10,120})/i,
-    /Title\s*:\s*([^\n\r]{10,120})/i,
-    /Safety\s+of\s+([^\n\r]{10,120})/i
-  ];
+  const mdTitleMatch = rawText.match(/^#\s*IS[^\n\r:]+[:–—]+\s*([^\n\r]+)/im) || rawText.match(/^#\s*([^\n\r]+)/m);
+  const mdSubTitleMatch = rawText.match(/^##\s*([^\n\r#]+)/m);
 
-  for (const pat of titlePatterns) {
-    const m = rawText.match(pat);
-    if (m && m[1] && m[1].trim().length > 5) {
-      title = m[1].trim().replace(/^[\s\-–—:]+/, '').replace(/[\s\-–—:]+$/, '');
-      break;
+  if (mdTitleMatch && mdTitleMatch[1] && !mdTitleMatch[1].startsWith('IS ')) {
+    title = mdTitleMatch[1].trim().replace(/^[\s\-–—:]+/, '').replace(/[\s\-–—:]+$/, '');
+  } else if (mdSubTitleMatch && mdSubTitleMatch[1] && !mdSubTitleMatch[1].match(/^\d+\./)) {
+    title = mdSubTitleMatch[1].trim();
+  } else {
+    const titlePatterns = [
+      /Indian Standard\s*\n+([^\n\r]{10,120})/i,
+      /Indian Standard\s*[-–—:]\s*([^\n\r]{10,120})/i,
+      /(?:Specification|Requirements)\s+for\s+([^\n\r]{10,120})/i,
+      /Title\s*:\s*([^\n\r]{10,120})/i,
+      /Safety\s+of\s+([^\n\r]{10,120})/i
+    ];
+
+    for (const pat of titlePatterns) {
+      const m = rawText.match(pat);
+      if (m && m[1] && m[1].trim().length > 5) {
+        title = m[1].trim().replace(/^[\s\-–—:]+/, '').replace(/[\s\-–—:]+$/, '');
+        break;
+      }
     }
   }
 
   if (!title) {
-    // Infer title from fileName
     title = cleanName
       .replace(/IS\s*\d+[\d\s\-_]*/gi, '')
       .replace(/\b(pdf|txt|doc|docx|standard|specification|gazette|official|download)\b/gi, '')
@@ -816,24 +933,56 @@ export function parseBisDocumentContent(fileName: string, rawText: string): BISS
 
   // 5. Extract Scope
   let scope = "";
+  const mdScopeMatch = rawText.match(/##\s*(?:\d+\.?\s*)?(?:SCOPE|Overview & Scope|Overview)[^\n\r]*\n+([\s\S]{30,600}?)(?=\n##|\n###|---|\n\d+\.)/i);
   const scopeMatch = rawText.match(/(?:1\s*\.?\s*SCOPE|SCOPE\s*(?:AND\s*FIELD\s*OF\s*APPLICATION)?)\s*[:\n\r]+([\s\S]{30,400}?)(?:\n\s*\d+\.|\n\s*Clause\s*\d+|2\s*\.|\n\s*REFERENCES)/i);
-  if (scopeMatch && scopeMatch[1]) {
+
+  if (mdScopeMatch && mdScopeMatch[1]) {
+    scope = mdScopeMatch[1].replace(/\*\*/g, '').replace(/^[*\-\s]+/gm, '').replace(/\s+/g, ' ').trim();
+  } else if (scopeMatch && scopeMatch[1]) {
     scope = scopeMatch[1].replace(/\s+/g, ' ').trim();
   } else {
     scope = `Prescribes safety, manufacturing, quality conformity limits, and sampling guidelines for ${title} under Bureau of Indian Standards regulations.`;
   }
 
-  // 6. Extract Clause References
+  // 6. Extract Clause References from Markdown / Text
   const clauseReferences: { clause: string; description: string }[] = [];
-  const clauseRegex = /(?:Clause|Section|\b)\s*(\d+(?:\.\d+)*)\s*[-–—:]\s*([^\n\r]{10,200})/gi;
-  let match;
-  let count = 0;
-  while ((match = clauseRegex.exec(rawText)) !== null && count < 6) {
+
+  // Match Markdown headings like "### Clause 5.3.1: Impact Resistance"
+  const mdClauseRegex = /###\s*(?:Clause\s*)?(\d+(?:\.\d+)*[^:\n\r]+)[:\-–—]?\s*([^\n\r]*)/gi;
+  let mdClMatch;
+  while ((mdClMatch = mdClauseRegex.exec(rawText)) !== null && clauseReferences.length < 8) {
+    const clauseName = mdClMatch[1].trim();
+    const clauseDesc = mdClMatch[2].trim() || `${clauseName} specification and compliance testing criteria.`;
     clauseReferences.push({
-      clause: `Clause ${match[1]}`,
-      description: match[2].trim()
+      clause: clauseName.toLowerCase().startsWith('clause') ? clauseName : `Clause ${clauseName}`,
+      description: clauseDesc
     });
-    count++;
+  }
+
+  // Also match table rows like "| **5.3.1** | Impact Resistance | ..."
+  if (clauseReferences.length < 3) {
+    const tableClauseRegex = /\|\s*\*\*?(\d+\.\d+(?:\.\d+)?)\*\*?\s*\|\s*([^|\n\r]{6,140})/gi;
+    let tblMatch;
+    while ((tblMatch = tableClauseRegex.exec(rawText)) !== null && clauseReferences.length < 8) {
+      clauseReferences.push({
+        clause: `Clause ${tblMatch[1].trim()}`,
+        description: tblMatch[2].replace(/\*\*/g, '').trim()
+      });
+    }
+  }
+
+  // Regular text clause regex fallback
+  if (clauseReferences.length === 0) {
+    const clauseRegex = /(?:Clause|Section|\b)\s*(\d+(?:\.\d+)*)\s*[-–—:]\s*([^\n\r]{10,200})/gi;
+    let match;
+    let count = 0;
+    while ((match = clauseRegex.exec(rawText)) !== null && count < 6) {
+      clauseReferences.push({
+        clause: `Clause ${match[1]}`,
+        description: match[2].trim()
+      });
+      count++;
+    }
   }
 
   if (clauseReferences.length === 0) {
@@ -880,8 +1029,68 @@ export function parseBisDocumentContent(fileName: string, rawText: string): BISS
     testingParameters,
     officialUrl: "https://www.services.bis.gov.in",
     lastUpdated: new Date().toISOString().split('T')[0] + " (Official Portal Ingest)",
-    clauseReferences
+    clauseReferences,
+    rawDocumentText: rawText
   };
+}
+
+export function formatStandardToMarkdown(standard: BISStandard, rawText?: string): string {
+  const existingMd = standard.markdownContent || rawText || standard.rawDocumentText;
+  
+  // If the stored content is already a full Markdown document, return it completely
+  if (existingMd && (existingMd.trim().startsWith('#') || existingMd.includes('## ') || existingMd.includes('| ---'))) {
+    return existingMd.trim();
+  }
+
+  // Otherwise, construct full Markdown document from structured fields
+  let md = `# ${standard.isNumber || 'BIS Standard'}: ${standard.title || 'Specification'}\n\n`;
+  md += `**Category:** ${standard.category || 'General'}  \n`;
+  md += `**Applicable Scheme:** ${standard.applicableScheme || 'Scheme-I (ISI Mark)'}  \n`;
+  md += `**Mandatory Status:** ${standard.mandatoryStatus || 'Mandatory (QCO)'}  \n`;
+  md += `**Official URL:** ${standard.officialUrl || 'https://www.services.bis.gov.in'}  \n`;
+  md += `**Last Gazette Revision:** ${standard.lastUpdated || '2026'}  \n\n`;
+
+  md += `## 1. Scope & Field of Application\n${standard.scope || 'No scope provided.'}\n\n`;
+
+  if (standard.keyRequirements && standard.keyRequirements.length > 0) {
+    md += `## 2. Key Compliance Requirements\n`;
+    standard.keyRequirements.forEach(req => {
+      md += `- ${req}\n`;
+    });
+    md += `\n`;
+  }
+
+  if (standard.testingParameters && standard.testingParameters.length > 0) {
+    md += `## 3. Mandatory Testing Parameters\n`;
+    standard.testingParameters.forEach(test => {
+      md += `- **${test}**\n`;
+    });
+    md += `\n`;
+  }
+
+  if (standard.requiredDocuments && standard.requiredDocuments.length > 0) {
+    md += `## 4. Required Factory & Lab Documentation\n`;
+    standard.requiredDocuments.forEach(doc => {
+      md += `- ${doc}\n`;
+    });
+    md += `\n`;
+  }
+
+  if (standard.clauseReferences && standard.clauseReferences.length > 0) {
+    md += `## 5. Official Clause Breakdown\n\n`;
+    md += `| Clause Reference | Specification & Threshold |\n`;
+    md += `| :--- | :--- |\n`;
+    standard.clauseReferences.forEach(cl => {
+      md += `| **${cl.clause}** | ${cl.description.replace(/\|/g, '\\|')} |\n`;
+    });
+    md += `\n`;
+  }
+
+  if (existingMd && existingMd.trim() && existingMd.trim() !== standard.scope) {
+    md += `## 6. Document Details & Gazette Extracts\n\n${existingMd.trim()}\n`;
+  }
+
+  return md;
 }
 
 

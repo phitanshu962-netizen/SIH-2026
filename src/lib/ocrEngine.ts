@@ -1,5 +1,3 @@
-import { createCanvas } from '@napi-rs/canvas';
-import Tesseract from 'tesseract.js';
 import { validateTextQuality, TextQualityResult } from './textQualityValidator';
 
 export interface OcrPageResult {
@@ -54,6 +52,25 @@ export async function performOcrOnPdfPage(
   const startTime = Date.now();
 
   try {
+    let createCanvas: any = null;
+    try {
+      const canvasPkg = eval('require')('@napi-rs/canvas');
+      createCanvas = canvasPkg.createCanvas;
+    } catch {
+      // Native canvas not available
+    }
+
+    let Tesseract: any = null;
+    try {
+      Tesseract = eval('require')('tesseract.js');
+    } catch {
+      // Tesseract not available
+    }
+
+    if (!createCanvas || !Tesseract) {
+      throw new Error('OCR engine requires @napi-rs/canvas and tesseract.js modules.');
+    }
+
     const pdfjsLib = await getPdfJsLib();
     const loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(pdfBuffer),
@@ -86,7 +103,12 @@ export async function performOcrOnPdfPage(
     const imageBuffer = canvas.toBuffer('image/png');
 
     // Run Tesseract OCR
-    const ocrResponse = await Tesseract.recognize(imageBuffer, 'eng');
+    const ocrRecognize = typeof Tesseract.recognize === 'function' ? Tesseract.recognize : Tesseract.default?.recognize;
+    if (!ocrRecognize) {
+      throw new Error('Tesseract recognize function not found.');
+    }
+
+    const ocrResponse = await ocrRecognize(imageBuffer, 'eng');
     const rawOcrText = ocrResponse?.data?.text || '';
     const cleanedText = cleanOcrText(rawOcrText);
 
@@ -107,7 +129,7 @@ export async function performOcrOnPdfPage(
 
   } catch (error: any) {
     const ocrDurationMs = Date.now() - startTime;
-    console.error(`[OCR Engine] Error executing OCR fallback on Page ${pageNumber}:`, error);
+    console.warn(`[OCR Engine] OCR fallback skipped on Page ${pageNumber}:`, error?.message || error);
 
     const emptyQuality = validateTextQuality('', { threshold: 0.60 });
 

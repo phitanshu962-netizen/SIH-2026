@@ -162,12 +162,15 @@ export default function DashboardPage() {
     }
   ];
 
-  const recentActivities = [
-    { title: "Standard IS 302-2-3:2017 Updated", detail: "Safety requirements for electric irons revised", time: "10m ago" },
-    { title: "Clause 8.1 Protection Analyzed", detail: "Creepage distance requirement evaluated", time: "25m ago" },
-    { title: "New Document IS 4151 Indexed", detail: "Protective helmets for motorcycle riders added", time: "1h ago" },
-    { title: "QCO Notification Checked", detail: "Mandatory certification deadline updated", time: "3h ago" }
-  ];
+  const recentActivities = standardsList.length > 0 
+    ? standardsList.slice(0, 4).map((std, i) => ({
+        title: `Standard ${std.isNumber} Indexed`,
+        detail: std.title,
+        time: `${(i + 1) * 15}m ago`
+      }))
+    : [
+        { title: "Database Synchronized", detail: "Connected to official Bureau of Indian Standards cloud", time: "Just now" }
+      ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32, width: '100%' }}>
@@ -187,7 +190,7 @@ export default function DashboardPage() {
         <form 
           onSubmit={(e) => {
             e.preventDefault();
-            const query = quickQuery.trim() || 'IS 302';
+            const query = quickQuery.trim() || (standardsList[0]?.isNumber || 'IS');
             router.push(`/matcher?q=${encodeURIComponent(query)}`);
           }}
           style={{
@@ -270,38 +273,51 @@ export default function DashboardPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {standardsList.slice(0, 4).map((std) => (
-                <div
-                  key={std.id}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '14px 16px', border: '1px solid #E8E2DC', borderRadius: 8,
-                    background: '#FFFCF8', transition: 'all 0.15s'
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
-                      <span style={{ fontSize: 13.5, fontWeight: 700, color: '#171717' }}>{std.isNumber}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, background: '#FFF1E8', color: '#E9783F', border: '1px solid #F4C4A5', borderRadius: 4, padding: '1px 6px' }}>
-                        {std.category}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 12.5, color: '#686868' }}>{std.title}</div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#4F7D5A', background: '#EBF4EE', border: '1px solid #B5D5BF', borderRadius: 4, padding: '2px 8px' }}>
-                      Active
-                    </span>
-                    <Link
-                      href={`/citations?standard=${encodeURIComponent(std.isNumber)}`}
-                      style={{ fontSize: 12, fontWeight: 600, color: '#242424', textDecoration: 'none', border: '1px solid #E8E2DC', padding: '4px 10px', borderRadius: 6, background: '#FFFFFF' }}
-                    >
-                      Analyze
-                    </Link>
-                  </div>
+              {standardsList.length === 0 ? (
+                <div style={{ padding: '28px 16px', textAlign: 'center', background: '#FDFBF7', borderRadius: 8, border: '1px dashed #E8E2DC' }}>
+                  <div style={{ fontSize: 13, color: '#686868', marginBottom: 10 }}>No standards currently indexed in database.</div>
+                  <Link
+                    href="/admin"
+                    style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF', background: '#F28C52', padding: '6px 14px', borderRadius: 6, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <span>Upload &amp; Index Standards in Admin</span>
+                    <ArrowRight style={{ width: 13, height: 13 }} />
+                  </Link>
                 </div>
-              ))}
+              ) : (
+                standardsList.slice(0, 4).map((std) => (
+                  <div
+                    key={std.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '14px 16px', border: '1px solid #E8E2DC', borderRadius: 8,
+                      background: '#FFFCF8', transition: 'all 0.15s'
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 700, color: '#171717' }}>{std.isNumber}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, background: '#FFF1E8', color: '#E9783F', border: '1px solid #F4C4A5', borderRadius: 4, padding: '1px 6px' }}>
+                          {std.category}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12.5, color: '#686868' }}>{std.title}</div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#4F7D5A', background: '#EBF4EE', border: '1px solid #B5D5BF', borderRadius: 4, padding: '2px 8px' }}>
+                        Active
+                      </span>
+                      <Link
+                        href={`/citations?standard=${encodeURIComponent(std.isNumber)}`}
+                        style={{ fontSize: 12, fontWeight: 600, color: '#242424', textDecoration: 'none', border: '1px solid #E8E2DC', padding: '4px 10px', borderRadius: 6, background: '#FFFFFF' }}
+                      >
+                        Analyze
+                      </Link>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -360,40 +376,48 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {standardsList.map((std) => (
-                <tr
-                  key={std.id}
-                  style={{ borderBottom: '1px solid #E8E2DC', transition: 'background 0.12s' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#FFFCF8')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <td style={{ padding: '12px', fontWeight: 700, color: '#171717' }}>{std.isNumber}</td>
-                  <td style={{ padding: '12px', color: '#242424', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{std.title}</td>
-                  <td style={{ padding: '12px', color: '#686868' }}>{std.category}</td>
-                  <td style={{ padding: '12px' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#4F7D5A', background: '#EBF4EE', border: '1px solid #B5D5BF', borderRadius: 4, padding: '2px 7px' }}>
-                      Active
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px', color: '#686868' }}>2026 Edition</td>
-                  <td style={{ padding: '12px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                      <Link
-                        href={`/citations?standard=${encodeURIComponent(std.isNumber)}`}
-                        style={{ fontSize: 12, fontWeight: 600, color: '#242424', textDecoration: 'none', border: '1px solid #E8E2DC', padding: '3px 8px', borderRadius: 4, background: '#FFFFFF' }}
-                      >
-                        Clauses
-                      </Link>
-                      <Link
-                        href={`/gap-analyzer?standard=${encodeURIComponent(std.isNumber)}`}
-                        style={{ fontSize: 12, fontWeight: 600, color: '#E9783F', textDecoration: 'none', border: '1px solid #F4C4A5', padding: '3px 8px', borderRadius: 4, background: '#FFF1E8' }}
-                      >
-                        Gap Analysis
-                      </Link>
-                    </div>
+              {standardsList.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ padding: '24px 12px', textAlign: 'center', color: '#686868' }}>
+                    No standards currently indexed in database. Upload or ingest standards via the Admin portal.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                standardsList.map((std) => (
+                  <tr
+                    key={std.id}
+                    style={{ borderBottom: '1px solid #E8E2DC', transition: 'background 0.12s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#FFFCF8')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <td style={{ padding: '12px', fontWeight: 700, color: '#171717' }}>{std.isNumber}</td>
+                    <td style={{ padding: '12px', color: '#242424', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{std.title}</td>
+                    <td style={{ padding: '12px', color: '#686868' }}>{std.category}</td>
+                    <td style={{ padding: '12px' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#4F7D5A', background: '#EBF4EE', border: '1px solid #B5D5BF', borderRadius: 4, padding: '2px 7px' }}>
+                        Active
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px', color: '#686868' }}>2026 Edition</td>
+                    <td style={{ padding: '12px', textAlign: 'right' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                        <Link
+                          href={`/citations?standard=${encodeURIComponent(std.isNumber)}`}
+                          style={{ fontSize: 12, fontWeight: 600, color: '#242424', textDecoration: 'none', border: '1px solid #E8E2DC', padding: '3px 8px', borderRadius: 4, background: '#FFFFFF' }}
+                        >
+                          Clauses
+                        </Link>
+                        <Link
+                          href={`/gap-analyzer?standard=${encodeURIComponent(std.isNumber)}`}
+                          style={{ fontSize: 12, fontWeight: 600, color: '#E9783F', textDecoration: 'none', border: '1px solid #F4C4A5', padding: '3px 8px', borderRadius: 4, background: '#FFF1E8' }}
+                        >
+                          Gap Analysis
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

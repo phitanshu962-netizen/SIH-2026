@@ -1,7 +1,8 @@
 async function verify() {
   console.log('--- Verifying BIS Compliance Chat Route ---');
+  const port = process.env.PORT || 3002;
   try {
-    const response = await fetch('http://localhost:3000/api/chat', {
+    const response = await fetch(`http://localhost:${port}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

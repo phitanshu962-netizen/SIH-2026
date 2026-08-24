@@ -37,15 +37,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Auto-connect to Firebase Database, seed if empty, and sync standards
   const syncDatabase = async () => {
     try {
-      const initial = getDynamicStandards();
-      await seedInitialDatabaseIfEmpty(initial);
       const fetched = await fetchStandardsFromFirebase();
-      if (fetched && fetched.length > 0) {
-        setDynamicStandardsStore(fetched);
-        setDbStandardsCount(fetched.length);
-      } else {
-        setDbStandardsCount(initial.length);
-      }
+      setDynamicStandardsStore(fetched || []);
+      setDbStandardsCount(fetched ? fetched.length : 0);
       setDbConnected(true);
     } catch (err) {
       console.warn("Database sync error:", err);
