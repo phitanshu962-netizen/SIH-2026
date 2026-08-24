@@ -252,6 +252,7 @@ function extractStreamText(raw: string): string {
  * AI-Powered Multimodal PDF-to-Markdown Parser using Google Gemini Flash.
  * Delivers highest accuracy (99.8%) preserving headers, tables, math, and clauses.
  */
+async function parsePdfViaGemini(buffer: Buffer, fileName?: string): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
   if (!apiKey || apiKey.includes('your_gemini_api_key_here')) return null;
 
