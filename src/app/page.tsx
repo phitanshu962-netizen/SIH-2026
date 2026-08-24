@@ -252,7 +252,7 @@ export default function DashboardPage() {
           >
             <div style={{ fontSize: 12, fontWeight: 600, color: '#686868', marginBottom: 4 }}>{metric.label}</div>
             <div style={{ fontSize: 26, fontWeight: 800, color: '#171717', letterSpacing: '-0.02em', margin: '0 0 2px' }}>
-              <span style={{ color: '#F28C52' }}>{metric.value}</span>
+              <span suppressHydrationWarning style={{ color: '#F28C52' }}>{metric.value}</span>
             </div>
             <div style={{ fontSize: 11.5, color: '#686868' }}>{metric.sub}</div>
           </div>
@@ -268,7 +268,7 @@ export default function DashboardPage() {
                 Active Standards Overview
               </h2>
               <Link href="/matcher" style={{ fontSize: 12.5, fontWeight: 700, color: '#E9783F', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-                View All ({standardsList.length}) <ArrowUpRight style={{ width: 14, height: 14 }} />
+                View All (<span suppressHydrationWarning>{standardsList.length}</span>) <ArrowUpRight style={{ width: 14, height: 14 }} />
               </Link>
             </div>
 

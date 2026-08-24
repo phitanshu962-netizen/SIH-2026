@@ -8,7 +8,7 @@ import {
   GitCompare, ExternalLink, Sparkles, Filter, CheckSquare, Upload, ArrowRight, 
   ArrowUpRight, AlertOctagon, Scale, Info, Check, RefreshCw, BarChart2, Zap
 } from 'lucide-react';
-import { getDynamicStandards, getTestingMappings, calculateTestingReadiness, getTestingLabs } from '@/lib/data/bisDatabase';
+import { getDynamicStandards, getTestingMappings, calculateTestingReadiness, getTestingLabs, builtInFallbackStandards } from '@/lib/data/bisDatabase';
 import { BISStandard, TestingMapping, TestClassificationCategory } from '@/lib/types';
 
 export default function TestingMapperPage() {
@@ -30,8 +30,10 @@ export default function TestingMapperPage() {
   useEffect(() => {
     const list = getDynamicStandards();
     setStandards(list);
-    if (list.length > 0 && (!selectedStandardId || !list.some(s => s.id === selectedStandardId))) {
-      setSelectedStandardId(list[0].id);
+    if (list.length > 0) {
+      if (!selectedStandardId || !list.some(s => s.id === selectedStandardId)) {
+        setSelectedStandardId(list[0].id);
+      }
     }
 
     const handleUpdate = () => {
@@ -43,7 +45,7 @@ export default function TestingMapperPage() {
     return () => window.removeEventListener('bis_standards_updated', handleUpdate);
   }, []);
 
-  const selectedStandard = standards.find(s => s.id === selectedStandardId) || standards[0] || getDynamicStandards()[0];
+  const selectedStandard = standards.find(s => s.id === selectedStandardId) || standards[0] || getDynamicStandards()[0] || builtInFallbackStandards[0];
   const mappings = getTestingMappings(selectedStandardId);
   const readiness = calculateTestingReadiness(selectedStandardId);
   const labs = getTestingLabs(selectedStandardId);

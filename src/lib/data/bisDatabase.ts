@@ -691,17 +691,45 @@ export const builtInFallbackStandards: BISStandard[] = [
 
 export const bisStandardsDatabase: BISStandard[] = builtInFallbackStandards;
 
-let dynamicStandardsStore: BISStandard[] = builtInFallbackStandards.filter(
-  s => !isDeletedStandard(s.id, s.isNumber)
-);
+function loadInitialDynamicStandards(): BISStandard[] {
+  if (typeof window !== 'undefined') {
+    try {
+      const cached = localStorage.getItem('bis_dynamic_standards');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(s => !isDeletedStandard(s.id, s.isNumber));
+        }
+      }
+    } catch (e) {}
+  }
+  return [];
+}
+
+let dynamicStandardsStore: BISStandard[] = loadInitialDynamicStandards();
 
 export function getDynamicStandards(): BISStandard[] {
+  if (typeof window !== 'undefined' && dynamicStandardsStore.length === 0) {
+    try {
+      const cached = localStorage.getItem('bis_dynamic_standards');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          dynamicStandardsStore = parsed.filter(s => !isDeletedStandard(s.id, s.isNumber));
+        }
+      }
+    } catch (e) {}
+  }
   return dynamicStandardsStore.filter(s => !isDeletedStandard(s.id, s.isNumber));
 }
 
 export function setDynamicStandardsStore(standards: BISStandard[]): void {
-  dynamicStandardsStore = standards.filter(s => !isDeletedStandard(s.id, s.isNumber));
+  dynamicStandardsStore = (standards || []).filter(s => !isDeletedStandard(s.id, s.isNumber));
   if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('bis_dynamic_standards', JSON.stringify(dynamicStandardsStore));
+      localStorage.setItem('bis_standards_synced', 'true');
+    } catch (e) {}
     window.dispatchEvent(new CustomEvent('bis_standards_updated', { detail: { count: dynamicStandardsStore.length } }));
   }
 }
@@ -726,7 +754,7 @@ export function addDynamicStandard(standard: BISStandard): void {
 
   const current = [...dynamicStandardsStore].filter(s => !isDeletedStandard(s.id, s.isNumber));
   const existingIdx = current.findIndex(
-    s => s.id === standard.id || s.isNumber.trim().toLowerCase() === standard.isNumber.trim().toLowerCase()
+    s => s.id === standard.id || (standard.isNumber && s.isNumber && s.isNumber.trim().toLowerCase() === standard.isNumber.trim().toLowerCase())
   );
   
   if (existingIdx >= 0) {
@@ -738,6 +766,9 @@ export function addDynamicStandard(standard: BISStandard): void {
   dynamicStandardsStore = current;
   
   if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('bis_dynamic_standards', JSON.stringify(dynamicStandardsStore));
+    } catch (e) {}
     window.dispatchEvent(new CustomEvent('bis_standards_updated', { detail: { count: current.length, standard } }));
   }
 }
@@ -762,7 +793,7 @@ export function updateDynamicStandard(standard: BISStandard): void {
 
   const current = [...dynamicStandardsStore];
   const existingIdx = current.findIndex(
-    s => s.id === standard.id || s.isNumber.trim().toLowerCase() === standard.isNumber.trim().toLowerCase()
+    s => s.id === standard.id || (standard.isNumber && s.isNumber && s.isNumber.trim().toLowerCase() === standard.isNumber.trim().toLowerCase())
   );
   
   if (existingIdx >= 0) {
@@ -774,6 +805,9 @@ export function updateDynamicStandard(standard: BISStandard): void {
   dynamicStandardsStore = current;
   
   if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('bis_dynamic_standards', JSON.stringify(dynamicStandardsStore));
+    } catch (e) {}
     window.dispatchEvent(new CustomEvent('bis_standards_updated', { detail: { count: dynamicStandardsStore.length, standard } }));
   }
 }
@@ -794,9 +828,12 @@ export function removeDynamicStandard(idOrIsNumber: string): void {
   }
 
   dynamicStandardsStore = dynamicStandardsStore.filter(
-    s => s.id !== idOrIsNumber && s.id.toLowerCase() !== target && s.isNumber.trim().toLowerCase() !== target
+    s => s.id !== idOrIsNumber && s.id.toLowerCase() !== target && (!s.isNumber || s.isNumber.trim().toLowerCase() !== target)
   );
   if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('bis_dynamic_standards', JSON.stringify(dynamicStandardsStore));
+    } catch (e) {}
     window.dispatchEvent(new CustomEvent('bis_standards_updated', { detail: { count: dynamicStandardsStore.length } }));
   }
 }
@@ -1573,10 +1610,11 @@ export const TIMELINE_MILESTONES: TimelineMilestone[] = [
 
 export function getStandardComparisons(targetStandardId?: string): StandardComparison[] {
   const currentDatabase = getDynamicStandards();
+  const availableStandards = currentDatabase.length > 0 ? currentDatabase : builtInFallbackStandards;
   
   const standardsToProcess = targetStandardId && targetStandardId !== 'all'
-    ? currentDatabase.filter(s => s.id === targetStandardId)
-    : currentDatabase;
+    ? availableStandards.filter(s => s.id === targetStandardId)
+    : availableStandards;
 
   return standardsToProcess.map(std => {
     const explicit = STANDARD_COMPARISONS.find(c => c.standardBaseId === std.id);
@@ -1607,8 +1645,9 @@ export function getStandardComparisons(targetStandardId?: string): StandardCompa
 
 export function getStandardAlerts(): StandardAlert[] {
   const currentDatabase = getDynamicStandards();
+  const availableStandards = currentDatabase.length > 0 ? currentDatabase : builtInFallbackStandards;
   
-  return currentDatabase.map((std, idx) => {
+  return availableStandards.map((std, idx) => {
     const isQCO = std.mandatoryStatus.includes('Mandatory');
     const isDraft = idx % 4 === 3;
     const isExtended = idx % 5 === 2;
@@ -1698,10 +1737,11 @@ function deriveSampleQuantity(category: string): string {
 
 export function getTestingMappings(targetStandardId?: string): TestingMapping[] {
   const currentDatabase = getDynamicStandards();
+  const availableStandards = currentDatabase.length > 0 ? currentDatabase : builtInFallbackStandards;
   
   const standardsToProcess = targetStandardId && targetStandardId !== 'all'
-    ? currentDatabase.filter(s => s.id === targetStandardId)
-    : currentDatabase;
+    ? availableStandards.filter(s => s.id === targetStandardId)
+    : availableStandards;
 
   const result: TestingMapping[] = [];
 
@@ -1835,7 +1875,8 @@ export function getTimelineMilestones(): TimelineMilestone[] {
 
 export function getLegalTreeDataForStandard(targetStandardId: string, customAttributes?: Record<string, string>): LegalTreeData {
   const currentDatabase = getDynamicStandards();
-  const std = currentDatabase.find(s => s.id === targetStandardId) || currentDatabase[0];
+  const availableStandards = currentDatabase.length > 0 ? currentDatabase : builtInFallbackStandards;
+  const std = availableStandards.find(s => s.id === targetStandardId) || availableStandards[0];
 
   const isMandatory = std.mandatoryStatus.includes('Mandatory');
   const isCRS = std.applicableScheme.includes('CRS');
@@ -2281,17 +2322,18 @@ export function simulateWhatIfChange(
 
 export function auditEvidenceClaimPipeline(claimInputText: string, targetStandardId?: string): EvidenceVerificationResult {
   const currentDatabase = getDynamicStandards();
+  const availableStandards = currentDatabase.length > 0 ? currentDatabase : builtInFallbackStandards;
   const lower = claimInputText.toLowerCase();
 
   // Match Target Standard
-  let matchedStd = currentDatabase.find(s => 
+  let matchedStd = availableStandards.find(s => 
     lower.includes(s.isNumber.toLowerCase()) || 
     lower.includes(s.id.toLowerCase()) ||
     s.title.toLowerCase().split('-')[0].split(' ').some(w => w.length > 3 && lower.includes(w))
-  ) || currentDatabase[0];
+  ) || availableStandards[0];
 
   if (targetStandardId) {
-    const specified = currentDatabase.find(s => s.id === targetStandardId);
+    const specified = availableStandards.find(s => s.id === targetStandardId);
     if (specified) matchedStd = specified;
   }
 
@@ -2679,7 +2721,8 @@ export function processAssistantResearchAgent(
   }
 
   // 6. DEFAULT RESEARCH INTENT: Dynamic Standard Lookup
-  const allStds = getDynamicStandards();
+  const currentDatabase = getDynamicStandards();
+  const allStds = currentDatabase.length > 0 ? currentDatabase : builtInFallbackStandards;
   const matchedStd = allStds.find(s => 
     s.isNumber.toLowerCase().includes(lower) ||
     s.title.toLowerCase().includes(lower) ||

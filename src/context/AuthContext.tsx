@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [dbConnected, setDbConnected] = useState(true);
-  const [dbStandardsCount, setDbStandardsCount] = useState(12);
+  const [dbStandardsCount, setDbStandardsCount] = useState(() => getDynamicStandards().length);
 
   // Auto-connect to Firebase Database, seed if empty, and sync standards
   const syncDatabase = async () => {

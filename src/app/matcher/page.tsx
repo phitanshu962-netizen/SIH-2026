@@ -111,12 +111,12 @@ function MatcherContent() {
             <span>Product Standard Matcher &amp; All Standards Catalog</span>
           </h1>
           <p style={{ fontSize: 13, color: '#686868', margin: 0, maxWidth: 760 }}>
-            Discover mandatory Indian Standards, QCO orders, testing benchmarks, and explore all {standardsList.length} indexed BIS standards in the database.
+            Discover mandatory Indian Standards, QCO orders, testing benchmarks, and explore all <span suppressHydrationWarning>{standardsList.length}</span> indexed BIS standards in the database.
           </p>
         </div>
 
-        <div style={{ background: '#FFF1E8', border: '1px solid #F4C4A5', borderRadius: 6, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, color: '#E9783F' }}>
-          {standardsList.length} Total Standards in Database
+        <div suppressHydrationWarning style={{ background: '#FFF1E8', border: '1px solid #F4C4A5', borderRadius: 6, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, color: '#E9783F' }}>
+          <span suppressHydrationWarning>{standardsList.length}</span> Total Standards in Database
         </div>
       </div>
 
@@ -292,7 +292,7 @@ function MatcherContent() {
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: '#171717', margin: '0 0 2px', display: 'flex', alignItems: 'center', gap: 8 }}>
               <BookOpen style={{ width: 20, height: 20, color: '#F28C52' }} />
-              <span>All Standards &amp; Products Catalog ({standardsList.length} Standards)</span>
+              <span>All Standards &amp; Products Catalog (<span suppressHydrationWarning>{standardsList.length}</span> Standards)</span>
             </h2>
             <p style={{ fontSize: 12.5, color: '#686868', margin: 0 }}>
               Official standards catalog including built-in Indian Standards and all custom uploaded documents.

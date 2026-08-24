@@ -80,7 +80,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   }>>([
     {
       sender: 'bot',
-      text: 'Ask BIS AI is connected to 12 grounded Indian Standards and official Gazette notifications. I can answer questions, cite clauses, or navigate you directly to platform features.'
+      text: 'Ask BIS AI is connected to indexed Indian Standards and official Gazette notifications. I can answer questions, cite clauses, or navigate you directly to platform features.'
     }
   ]);
   const [panelProcessing, setPanelProcessing] = useState(false);
@@ -628,7 +628,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           {!sidebarCollapsed && (
             <div style={{ padding: 12, margin: '8px 8px 14px', background: '#FFFCF8', border: '1px solid #E8E2DC', borderRadius: 8, fontSize: 11.5, flexShrink: 0 }}>
               <div style={{ fontWeight: 700, color: '#171717', marginBottom: 2 }}>Standards Database</div>
-              <div style={{ color: '#686868' }}>{dbStandardsCount || 12} Official IS Standards Indexed</div>
+              <div suppressHydrationWarning style={{ color: '#686868' }}>
+                <span suppressHydrationWarning>{dbStandardsCount}</span> Official IS Standards Indexed
+              </div>
             </div>
           )}
 
