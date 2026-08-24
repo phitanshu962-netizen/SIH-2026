@@ -20,6 +20,9 @@ export interface BISStandard {
     clause: string;
     description: string;
   }[];
+  hsnCodes?: string[];
+  qcoGazetteRef?: string;
+  qcoEnforcementDate?: string;
   rawDocumentText?: string;
   markdownContent?: string;
 }
@@ -193,6 +196,8 @@ export interface TestingMapping {
     calibrationFrequencyMonths: number;
     calibrationCertId?: string;
     supportsTestCount?: number;
+    estimatedCost?: string;
+    estimatedCapexInr?: number;
   };
   labVenue?: 'IN-HOUSE PERMITTED' | 'EXTERNAL LAB REQUIRED' | 'EITHER';
   procedureSummary?: string[];

@@ -88,7 +88,10 @@ export const builtInFallbackStandards: BISStandard[] = [
       { clause: "Clause 13", description: "Leakage current and electric strength at operating temperature." },
       { clause: "Clause 19", description: "Abnormal operation and thermal limiter operation." },
       { clause: "Clause 22", description: "Constructional requirements, sharp edges and cord anchorage." }
-    ]
+    ],
+    hsnCodes: ["85164000", "8516.40", "8516"],
+    qcoGazetteRef: "DPIIT S.O. 1288(E) / Electrical Appliances Order",
+    qcoEnforcementDate: "2024-01-01 (Mandatory Scheme-I)"
   },
   {
     id: "is-302-2-201",
@@ -119,7 +122,10 @@ export const builtInFallbackStandards: BISStandard[] = [
     clauseReferences: [
       { clause: "Clause 22.101", description: "Pressure relief valve opening pressure limits." },
       { clause: "Clause 19.4", description: "Operation of thermal cut-out under dry heating conditions." }
-    ]
+    ],
+    hsnCodes: ["85161000", "8516.10", "8516"],
+    qcoGazetteRef: "DPIIT S.O. 2314(E) / Water Heaters Order",
+    qcoEnforcementDate: "2023-06-15 (Mandatory Scheme-I)"
   },
   {
     id: "is-4151",
@@ -151,7 +157,10 @@ export const builtInFallbackStandards: BISStandard[] = [
     clauseReferences: [
       { clause: "Clause 6.1", description: "Materials non-irritant to skin and resistant to UV." },
       { clause: "Clause 7.3", description: "Impact absorption test using ambient, hot, cold and moisture conditioning." }
-    ]
+    ],
+    hsnCodes: ["65061010", "6506.10", "6506"],
+    qcoGazetteRef: "MoRTH S.O. 3241(E) / Protective Helmets (Quality Control) Order",
+    qcoEnforcementDate: "2021-06-01 (Mandatory across India)"
   },
   {
     id: "is-9873-1",
@@ -183,7 +192,10 @@ export const builtInFallbackStandards: BISStandard[] = [
     clauseReferences: [
       { clause: "Clause 4.4", description: "Small parts hazard for children under 36 months." },
       { clause: "Clause 4.7", description: "Accessible sharp edges and wire ends specifications." }
-    ]
+    ],
+    hsnCodes: ["95030010", "9503.00", "9503"],
+    qcoGazetteRef: "DPIIT S.O. 858(E) / Toys (Quality Control) Order",
+    qcoEnforcementDate: "2021-01-01 (Mandatory Scheme-I)"
   },
   {
     id: "is-16102-1",
@@ -214,7 +226,10 @@ export const builtInFallbackStandards: BISStandard[] = [
     clauseReferences: [
       { clause: "Clause 6", description: "Marking requirements including CRS registration logo." },
       { clause: "Clause 8", description: "Insulation resistance and electric strength after humidity treatment." }
-    ]
+    ],
+    hsnCodes: ["85395000", "8539.50", "9405"],
+    qcoGazetteRef: "MeitY S.O. 1957(E) / Electronics & IT Goods (CRO)",
+    qcoEnforcementDate: "2016-03-01 (Compulsory Registration)"
   },
   {
     id: "is-14543",
@@ -247,7 +262,10 @@ export const builtInFallbackStandards: BISStandard[] = [
       { clause: "Table 1", description: "Organoleptic and physical parameters." },
       { clause: "Table 2", description: "General parameters concerning substances undesirable in excessive amounts." },
       { clause: "Table 3", description: "Parameters concerning toxic substances." }
-    ]
+    ],
+    hsnCodes: ["22011010", "2201.10", "2201"],
+    qcoGazetteRef: "FSSAI & MCA S.O. 1450(E) / Mineral Water Order",
+    qcoEnforcementDate: "2001-03-29 (Enforced)"
   },
   {
     id: "is-1786",
@@ -279,7 +297,10 @@ export const builtInFallbackStandards: BISStandard[] = [
     clauseReferences: [
       { clause: "Clause 4.2", description: "Chemical composition limits." },
       { clause: "Clause 8.1", description: "Mechanical properties requirements." }
-    ]
+    ],
+    hsnCodes: ["72142090", "7214.20", "7214"],
+    qcoGazetteRef: "Ministry of Steel S.O. 1139(E) / Steel & Steel Products Order",
+    qcoEnforcementDate: "2012-09-12 (Enforced)"
   },
   {
     id: "is-1417",
@@ -309,7 +330,10 @@ export const builtInFallbackStandards: BISStandard[] = [
     clauseReferences: [
       { clause: "Clause 4.1", description: "Designation of fineness of gold alloys." },
       { clause: "Clause 5", description: "Mandatory hallmarking symbols and HUID placement." }
-    ]
+    ],
+    hsnCodes: ["71131910", "7113.19", "7113"],
+    qcoGazetteRef: "MCA S.O. 4333(E) / Hallmarking of Gold Jewellery Order",
+    qcoEnforcementDate: "2021-06-23 (Phased Mandatory Districts)"
   },
   {
     id: "is-14286",
@@ -341,7 +365,10 @@ export const builtInFallbackStandards: BISStandard[] = [
     clauseReferences: [
       { clause: "Clause 10.11", description: "Thermal cycling test procedure and degradation limits." },
       { clause: "Clause 10.13", description: "Damp heat endurance test protocol." }
-    ]
+    ],
+    hsnCodes: ["85414300", "8541.40", "8541"],
+    qcoGazetteRef: "MNRE S.O. 2920(E) / Solar Photovoltaics CRO",
+    qcoEnforcementDate: "2019-04-01 (Mandatory CRS)"
   },
   {
     id: "is-15633",
@@ -372,7 +399,10 @@ export const builtInFallbackStandards: BISStandard[] = [
     clauseReferences: [
       { clause: "Clause 5.2", description: "Tread wear indicators (TWI) requirement." },
       { clause: "Clause 6.4", description: "Dynamic endurance drum testing procedure." }
-    ]
+    ],
+    hsnCodes: ["40111010", "4011.10", "4011"],
+    qcoGazetteRef: "DPIIT S.O. 3844(E) / Pneumatic Tyres Order",
+    qcoEnforcementDate: "2020-04-01 (Mandatory Scheme-I)"
   },
   {
     id: "is-269",
@@ -403,7 +433,10 @@ export const builtInFallbackStandards: BISStandard[] = [
     clauseReferences: [
       { clause: "Clause 6", description: "Chemical requirements and magnesia limits." },
       { clause: "Clause 7", description: "Physical strength and setting time limits." }
-    ]
+    ],
+    hsnCodes: ["25232910", "2523.29", "2523"],
+    qcoGazetteRef: "DPIIT S.O. 1821(E) / Cement (Quality Control) Order",
+    qcoEnforcementDate: "2003-02-17 (Enforced)"
   },
   {
     id: "is-16046-2",
@@ -435,7 +468,10 @@ export const builtInFallbackStandards: BISStandard[] = [
     clauseReferences: [
       { clause: "Clause 7.2.2", description: "External short circuit test requirements." },
       { clause: "Clause 7.3.2", description: "Thermal abuse test conditions." }
-    ]
+    ],
+    hsnCodes: ["85076000", "8507.60", "8507"],
+    qcoGazetteRef: "MeitY S.O. 3128(E) / Electronics & IT Goods (CRO)",
+    qcoEnforcementDate: "2021-03-14 (Mandatory CRS)"
   },
   {
     id: "is-374",
@@ -1696,6 +1732,41 @@ function deriveSampleQuantity(category: string): string {
   return "3 Representative Samples";
 }
 
+function deriveEquipmentCost(eqName: string): { costStr: string; capexInr: number } {
+  const e = eqName.toLowerCase();
+  if (e.includes('voltage') || e.includes('hv') || e.includes('breakdown')) {
+    return { costStr: "~₹45,000", capexInr: 45000 };
+  }
+  if (e.includes('leakage')) {
+    return { costStr: "~₹28,000", capexInr: 28000 };
+  }
+  if (e.includes('thermocouple') || e.includes('temp')) {
+    return { costStr: "~₹65,000", capexInr: 65000 };
+  }
+  if (e.includes('drop') || e.includes('accelerometer') || e.includes('headform') || e.includes('impact')) {
+    return { costStr: "~₹1,85,000", capexInr: 185000 };
+  }
+  if (e.includes('icp-ms') || e.includes('spectrometer') || e.includes('xrf')) {
+    return { costStr: "~₹12,50,000", capexInr: 1250000 };
+  }
+  if (e.includes('compression') || e.includes('utm') || e.includes('universal')) {
+    return { costStr: "~₹4,80,000", capexInr: 480000 };
+  }
+  if (e.includes('damp heat') || e.includes('environmental') || e.includes('chamber')) {
+    return { costStr: "~₹5,50,000", capexInr: 550000 };
+  }
+  if (e.includes('battery') || e.includes('short circuit') || e.includes('oven')) {
+    return { costStr: "~₹2,20,000", capexInr: 220000 };
+  }
+  if (e.includes('autoclave') || e.includes('incubator') || e.includes('microbiology')) {
+    return { costStr: "~₹1,40,000", capexInr: 140000 };
+  }
+  if (e.includes('flame') || e.includes('glow wire')) {
+    return { costStr: "~₹3,20,000", capexInr: 320000 };
+  }
+  return { costStr: "~₹35,000", capexInr: 35000 };
+}
+
 export function getTestingMappings(targetStandardId?: string): TestingMapping[] {
   const currentDatabase = getDynamicStandards();
   
@@ -1716,6 +1787,7 @@ export function getTestingMappings(targetStandardId?: string): TestingMapping[] 
 
       const doc = std.requiredDocuments[idx % Math.max(1, std.requiredDocuments.length)] || "NABL Accredited Test Certificate";
       const eqName = deriveEquipmentFromParam(param, std.category);
+      const costInfo = deriveEquipmentCost(eqName);
 
       const isHV = param.toLowerCase().includes('voltage') || param.toLowerCase().includes('insulation');
       const isThermal = param.toLowerCase().includes('temp') || param.toLowerCase().includes('thermal');
@@ -1752,7 +1824,9 @@ export function getTestingMappings(targetStandardId?: string): TestingMapping[] 
           calibrationStatus: idx === 2 ? 'CALIBRATION EXPIRED' : 'VALID',
           calibrationFrequencyMonths: 12,
           calibrationCertId: `CAL-NABL-2026-${100 + idx}`,
-          supportsTestCount: 3
+          supportsTestCount: 3,
+          estimatedCost: costInfo.costStr,
+          estimatedCapexInr: costInfo.capexInr
         },
         labVenue: isExternalNeeded ? 'EXTERNAL LAB REQUIRED' : 'IN-HOUSE PERMITTED',
         procedureSummary: [

@@ -351,7 +351,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   return (
     <div suppressHydrationWarning style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#FFFCF8', color: '#242424' }}>
       {/* Hidden Google Translate Element */}
-      <div id="google_translate_element" style={{ display: 'none' }}></div>
+      <div id="google_translate_element" suppressHydrationWarning style={{ display: 'none' }}></div>
 
       {/* ══════════════ UNIFIED INSTITUTIONAL HEADER BAR ══════════════ */}
       <header suppressHydrationWarning style={{

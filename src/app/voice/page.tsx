@@ -15,8 +15,10 @@ export default function VoiceAssistantPage() {
   const router = useRouter();
   
   const [isListening, setIsListening] = useState<boolean>(false);
-  const [transcript, setTranscript] = useState<string>('Click the microphone button and speak your query or navigation command...');
-  const [aiVoiceResponse, setAiVoiceResponse] = useState<string>('Welcome to NiyamAI Dedicated Voice Assistant. Speak your compliance query or say "Open Gap Analyzer" to navigate hands-free.');
+  const [wakeWordEnabled, setWakeWordEnabled] = useState<boolean>(true);
+  const [wakeWordTriggered, setWakeWordTriggered] = useState<boolean>(false);
+  const [transcript, setTranscript] = useState<string>('Listening in background... Say "Hey BIS" or "BIS" to activate.');
+  const [aiVoiceResponse, setAiVoiceResponse] = useState<string>('Welcome to NiyamAI Dedicated Voice Assistant. Say "Hey BIS" followed by your query or command (e.g. "Hey BIS, open Gap Analyzer").');
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus>({ isAvailable: false, models: [] });
@@ -25,6 +27,7 @@ export default function VoiceAssistantPage() {
   const [structuredData, setStructuredData] = useState<any>(null);
 
   const recognitionRef = useRef<any>(null);
+  const wakeWordRecognitionRef = useRef<any>(null);
 
   useEffect(() => {
     // Check Ollama Local Server Status
@@ -37,8 +40,65 @@ export default function VoiceAssistantPage() {
 
     return () => {
       stopAudioPlayback();
+      if (wakeWordRecognitionRef.current) {
+        try { wakeWordRecognitionRef.current.stop(); } catch (e) {}
+      }
     };
   }, []);
+
+  // Continuous Wake-Word Background Listener
+  useEffect(() => {
+    if (!wakeWordEnabled || isListening || isSpeaking || isLoading) {
+      if (wakeWordRecognitionRef.current) {
+        try { wakeWordRecognitionRef.current.stop(); } catch (e) {}
+      }
+      return;
+    }
+
+    if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const wakeRec = new SpeechRecognition();
+      wakeWordRecognitionRef.current = wakeRec;
+      wakeRec.lang = 'en-IN';
+      wakeRec.continuous = true;
+      wakeRec.interimResults = true;
+
+      wakeRec.onresult = (event: any) => {
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const text = event.results[i][0].transcript.toLowerCase();
+          
+          if (text.includes('hey bis') || text.includes('bis') || text.includes('hey niyam') || text.includes('ok bis')) {
+            setWakeWordTriggered(true);
+            setTimeout(() => setWakeWordTriggered(false), 2000);
+
+            // Extract command after wake word
+            const cleaned = text.replace(/^.*?(hey\s+bis|bis|hey\s+niyam|ok\s+bis)\s*/i, '').trim();
+            if (cleaned.length > 2) {
+              setTranscript(`Wake Word Triggered: "${cleaned}"`);
+              try { wakeRec.stop(); } catch (e) {}
+              handleProcessVoiceInput(cleaned);
+            } else {
+              setTranscript('Wake-word "Hey BIS" detected! Listening for query...');
+              toggleListening();
+            }
+            break;
+          }
+        }
+      };
+
+      wakeRec.onerror = () => {};
+      wakeRec.onend = () => {
+        // Auto-restart continuous background listener if still enabled
+        if (wakeWordEnabled && !isListening && !isSpeaking) {
+          try { wakeRec.start(); } catch (e) {}
+        }
+      };
+
+      try {
+        wakeRec.start();
+      } catch (e) {}
+    }
+  }, [wakeWordEnabled, isListening, isSpeaking, isLoading]);
 
   const toggleListening = () => {
     if (isListening) {
@@ -173,32 +233,59 @@ export default function VoiceAssistantPage() {
       {/* Header Banner */}
       <div className="bg-white border border-orange-200 rounded-xl p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 flex-wrap gap-1">
             <span className="bg-orange-100 text-orange-800 text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
               Dedicated Ollama Voice AI
+            </span>
+            <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold flex items-center space-x-1 ${
+              wakeWordEnabled ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-700'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${wakeWordEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+              <span>{wakeWordEnabled ? 'Wake-Word: "Hey BIS" / "BIS" (Active)' : 'Wake-Word: Inactive'}</span>
             </span>
             <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold flex items-center space-x-1 ${
               ollamaStatus.isAvailable ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
             }`}>
               <span className={`w-2 h-2 rounded-full ${ollamaStatus.isAvailable ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
-              <span>{ollamaStatus.isAvailable ? `Ollama Local Ready (${ollamaStatus.activeModel})` : 'Neural BIS Grounded RAG Ready'}</span>
+              <span>{ollamaStatus.isAvailable ? `Ollama Local (${ollamaStatus.activeModel})` : 'BIS Neural RAG'}</span>
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-2 text-slate-900">
             Dedicated Voice Assistant for Indian Standards
           </h1>
           <p className="text-slate-600 text-xs sm:text-sm mt-1 max-w-2xl font-medium">
-            Full hands-free speech recognition and text-to-speech engine. Ask complex compliance questions out loud or use voice commands to navigate pages instantly.
+            Full hands-free speech recognition with &quot;Hey BIS&quot; wake-word activation and text-to-speech engine. Ask compliance questions out loud or navigate pages completely hands-free.
           </p>
         </div>
 
         <div className="flex space-x-2">
+          <button
+            onClick={() => setWakeWordEnabled(!wakeWordEnabled)}
+            style={{
+              background: wakeWordEnabled ? '#FFF1E8' : '#F8F6F2',
+              color: wakeWordEnabled ? '#E9783F' : '#686868',
+              border: `1px solid ${wakeWordEnabled ? '#F4C4A5' : '#E8E2DC'}`,
+              borderRadius: 6, padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer'
+            }}
+          >
+            Wake-Word: {wakeWordEnabled ? 'Enabled (ON)' : 'Disabled (OFF)'}
+          </button>
           <Link href="/gap-analyzer" className="bg-orange-600 hover:bg-orange-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow-sm">
             <span>Gap Analyzer</span>
             <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
       </div>
+
+      {/* Wake-Word Radar Pulse Alert */}
+      {wakeWordTriggered && (
+        <div style={{ background: '#FFF1E8', border: '1.5px solid #F28C52', borderRadius: 8, padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, animation: 'pulse 1s infinite' }}>
+          <Sparkles style={{ width: 18, height: 18, color: '#E9783F' }} />
+          <span style={{ fontSize: 13, fontWeight: 800, color: '#171717' }}>
+            ⚡ Wake-Word Detected: "Hey BIS" listening for your voice command...
+          </span>
+        </div>
+      )}
 
       {/* Interactive Voice Stage */}
       <div className="bg-white p-8 rounded-xl border border-orange-200 shadow-sm text-center space-y-6">

@@ -23,6 +23,7 @@ function MatcherContent() {
 
   // Matcher Input State
   const [productName, setProductName] = useState(initialQuery || 'Electric Iron');
+  const [hsnCode, setHsnCode] = useState('');
   const [material, setMaterial] = useState('Plastic & Metal');
   const [usage, setUsage] = useState('Domestic');
   const [businessType, setBusinessType] = useState('MSME');
@@ -33,6 +34,16 @@ function MatcherContent() {
     matchConfidence: number;
     secondaryMatches: BISStandard[];
     recommendations: string[];
+    disambiguation?: {
+      isHybrid: boolean;
+      question: string;
+      options: {
+        label: string;
+        description: string;
+        targetStandardId: string;
+        scheme: string;
+      }[];
+    } | null;
   } | null>(null);
 
   // Load and subscribe to dynamic standards
@@ -52,11 +63,11 @@ function MatcherContent() {
     if (initialQuery) {
       setProductName(initialQuery);
       setCatalogSearch(initialQuery);
-      executeMatch(initialQuery, material, usage, businessType);
+      executeMatch(initialQuery, hsnCode, material, usage, businessType);
     }
   }, [initialQuery]);
 
-  const executeMatch = async (pName: string, mat: string, usg: string, bType: string) => {
+  const executeMatch = async (pName: string, hsn: string, mat: string, usg: string, bType: string) => {
     setIsLoading(true);
     try {
       const res = await fetch('/api/matcher', {
@@ -64,6 +75,7 @@ function MatcherContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productName: pName,
+          hsnCode: hsn,
           material: mat,
           usage: usg,
           businessType: bType,
@@ -80,8 +92,18 @@ function MatcherContent() {
   };
 
   const handleMatch = () => {
-    executeMatch(productName, material, usage, businessType);
+    executeMatch(productName, hsnCode, material, usage, businessType);
   };
+
+  const hsnPresets = [
+    { code: '8516.40', label: 'Electric Irons', standard: 'IS 302-2-3' },
+    { code: '6403.40', label: 'Safety Footwear', standard: 'IS 15298 (Part 2)' },
+    { code: '9503.00', label: 'Toys & Games', standard: 'IS 9873 (Part 1)' },
+    { code: '6506.10', label: 'Helmets', standard: 'IS 4151' },
+    { code: '8539.50', label: 'LED Bulbs', standard: 'IS 16102 (Part 1)' },
+    { code: '8504.40', label: 'Power Adapters', standard: 'IS 13252' },
+    { code: '2201.10', label: 'Mineral Water', standard: 'IS 14543' }
+  ];
 
   const categories = ['all', ...Array.from(new Set(standardsList.map(s => s.category).filter(Boolean)))];
   const schemes = ['all', 'Scheme-I (ISI Mark)', 'CRS (Compulsory Registration)', 'FMCS', 'Hallmarking'];
@@ -92,7 +114,8 @@ function MatcherContent() {
       s.isNumber.toLowerCase().includes(catalogSearch.toLowerCase()) ||
       s.title.toLowerCase().includes(catalogSearch.toLowerCase()) ||
       s.scope?.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-      s.category?.toLowerCase().includes(catalogSearch.toLowerCase());
+      s.category?.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+      (s.hsnCodes && s.hsnCodes.some(h => h.toLowerCase().includes(catalogSearch.toLowerCase())));
 
     const matchesCat = selectedCategory === 'all' || s.category?.toLowerCase() === selectedCategory.toLowerCase();
     const matchesSch = selectedScheme === 'all' || s.applicableScheme?.toLowerCase().includes(selectedScheme.toLowerCase());
@@ -108,26 +131,31 @@ function MatcherContent() {
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: '#171717', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 10 }}>
             <Search style={{ width: 24, height: 24, color: '#F28C52' }} />
-            <span>Product Standard Matcher &amp; All Standards Catalog</span>
+            <span>Product Standard Matcher &amp; Customs Tariff Catalog</span>
           </h1>
           <p style={{ fontSize: 13, color: '#686868', margin: 0, maxWidth: 760 }}>
-            Discover mandatory Indian Standards, QCO orders, testing benchmarks, and explore all {standardsList.length} indexed BIS standards in the database.
+            Discover mandatory Indian Standards, 8-digit HSN mapping, QCO Gazette orders, resolve dual-domain hybrid ambiguities, and explore all {standardsList.length} indexed BIS standards.
           </p>
         </div>
 
         <div style={{ background: '#FFF1E8', border: '1px solid #F4C4A5', borderRadius: 6, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, color: '#E9783F' }}>
-          {standardsList.length} Total Standards in Database
+          {standardsList.length} Standards • Tariff Grounded
         </div>
       </div>
 
       {/* ══════════════ 1. PRODUCT MATCHER SEARCH ENGINE ══════════════ */}
       <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 10, padding: 24, boxShadow: '0 2px 8px rgba(40,30,20,0.03)', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 800, color: '#171717', margin: 0, display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #E8E2DC', paddingBottom: 12 }}>
-          <Filter style={{ width: 16, height: 16, color: '#F28C52' }} />
-          <span>Product Specifications &amp; Scope Matcher</span>
-        </h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E8E2DC', paddingBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: '#171717', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Filter style={{ width: 16, height: 16, color: '#F28C52' }} />
+            <span>Product Specifications &amp; Scope Matcher</span>
+          </h2>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#686868' }}>
+            Includes 8-Digit HSN Lookup &amp; Hybrid Boundary Disambiguation
+          </span>
+        </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
           
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#171717', marginBottom: 4 }}>Product Name / Keyword</label>
@@ -135,7 +163,23 @@ function MatcherContent() {
               type="text"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
-              placeholder="e.g. Footwear, Electric Iron, Helmet, Toys..."
+              placeholder="e.g. Electric Iron, Smart Watch, Footwear..."
+              style={{
+                width: '100%', padding: '10px 12px', background: '#FFFCF8', border: '1px solid #E8E2DC',
+                borderRadius: 6, fontSize: 13, color: '#242424', outline: 'none', boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#171717', marginBottom: 4 }}>
+              HSN / Customs Tariff Code (8-Digit)
+            </label>
+            <input 
+              type="text"
+              value={hsnCode}
+              onChange={(e) => setHsnCode(e.target.value)}
+              placeholder="e.g. 8516.40, 6403.40, 9503.00..."
               style={{
                 width: '100%', padding: '10px 12px', background: '#FFFCF8', border: '1px solid #E8E2DC',
                 borderRadius: 6, fontSize: 13, color: '#242424', outline: 'none', boxSizing: 'border-box'
@@ -197,25 +241,49 @@ function MatcherContent() {
 
         </div>
 
+        {/* Quick HSN Presets */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: '#F8F6F2', padding: '10px 14px', borderRadius: 8 }}>
+          <span style={{ fontSize: 11.5, fontWeight: 800, color: '#686868', textTransform: 'uppercase' }}>Quick HSN Presets:</span>
+          {hsnPresets.map((p, idx) => (
+            <button
+              key={idx}
+              onClick={() => {
+                setHsnCode(p.code);
+                setProductName(p.label);
+                executeMatch(p.label, p.code, material, usage, businessType);
+              }}
+              style={{
+                background: hsnCode === p.code ? '#F28C52' : '#FFFFFF',
+                color: hsnCode === p.code ? '#FFFFFF' : '#171717',
+                border: '1px solid #E8E2DC',
+                padding: '3px 8px', borderRadius: 4, fontSize: 11.5, fontWeight: 700,
+                cursor: 'pointer', transition: 'all 0.12s ease'
+              }}
+            >
+              {p.code} ({p.label})
+            </button>
+          ))}
+        </div>
+
         <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
           <button
             onClick={handleMatch}
-            disabled={isLoading || !productName.trim()}
+            disabled={isLoading || (!productName.trim() && !hsnCode.trim())}
             style={{
               background: '#F28C52', color: '#FFFFFF', border: 'none', borderRadius: 6,
-              padding: '11px 24px', fontSize: 13, fontWeight: 700, cursor: isLoading || !productName.trim() ? 'not-allowed' : 'pointer',
-              opacity: isLoading || !productName.trim() ? 0.6 : 1,
+              padding: '11px 24px', fontSize: 13, fontWeight: 700, cursor: isLoading || (!productName.trim() && !hsnCode.trim()) ? 'not-allowed' : 'pointer',
+              opacity: isLoading || (!productName.trim() && !hsnCode.trim()) ? 0.6 : 1,
               display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 2px 6px rgba(242, 140, 82, 0.25)'
             }}
           >
             {isLoading ? (
               <>
                 <RefreshCw style={{ width: 15, height: 15, animation: 'spin 1s linear infinite' }} />
-                <span>Matching Vector Embeddings...</span>
+                <span>Matching Vector Embeddings &amp; Tariff...</span>
               </>
             ) : (
               <>
-                <span>Run Product Matcher</span>
+                <span>Run Product &amp; HSN Matcher</span>
                 <ArrowRight style={{ width: 15, height: 15 }} />
               </>
             )}
@@ -223,26 +291,96 @@ function MatcherContent() {
         </div>
       </div>
 
+      {/* Boundary Disambiguation Alert Box (For Hybrid Products) */}
+      {matchResult?.disambiguation?.isHybrid && (
+        <div style={{ background: '#FFF1E8', border: '1px solid #F4C4A5', borderRadius: 10, padding: 20, boxShadow: '0 2px 8px rgba(242,140,82,0.1)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <Sparkles style={{ width: 22, height: 22, color: '#E9783F', flexShrink: 0, marginTop: 2 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#E9783F', textTransform: 'uppercase', marginBottom: 2 }}>
+                ⚠️ Hybrid Product Boundary Disambiguation Required
+              </div>
+              <h3 style={{ fontSize: 14.5, fontWeight: 800, color: '#171717', margin: '0 0 10px' }}>
+                {matchResult.disambiguation.question}
+              </h3>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                {matchResult.disambiguation.options.map((opt, oIdx) => (
+                  <div
+                    key={oIdx}
+                    onClick={() => {
+                      const target = standardsList.find(s => s.id === opt.targetStandardId);
+                      if (target) {
+                        setMatchResult(prev => prev ? ({ ...prev, primaryMatch: target, matchConfidence: 96 }) : null);
+                      }
+                    }}
+                    style={{
+                      background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 8, padding: 14,
+                      cursor: 'pointer', transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 800, color: '#171717', marginBottom: 4 }}>
+                      Option {oIdx + 1}: {opt.label}
+                    </div>
+                    <p style={{ fontSize: 12, color: '#686868', margin: '0 0 8px', lineHeight: 1.4 }}>
+                      {opt.description}
+                    </p>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#4F7D5A', background: '#EBF4EE', padding: '3px 8px', borderRadius: 4, display: 'inline-block' }}>
+                      {opt.scheme}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Match Results Display */}
       {matchResult && (
         <div style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: 10, padding: 24, boxShadow: '0 2px 8px rgba(40,30,20,0.03)', borderLeft: '4px solid #F28C52', display: 'flex', flexDirection: 'column', gap: 18 }}>
           
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', borderBottom: '1px solid #E8E2DC', paddingBottom: 16, flexWrap: 'wrap', gap: 12 }}>
             <div>
-              <span style={{ fontSize: 11, fontWeight: 800, color: '#E9783F', background: '#FFF1E8', border: '1px solid #F4C4A5', padding: '3px 10px', borderRadius: 20, textTransform: 'uppercase' }}>
-                Primary Matched Standard • {matchResult.matchConfidence}% Match
-              </span>
-              <h3 style={{ fontSize: 20, fontWeight: 800, color: '#171717', margin: '8px 0 4px' }}>{matchResult.primaryMatch.isNumber}</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#E9783F', background: '#FFF1E8', border: '1px solid #F4C4A5', padding: '3px 10px', borderRadius: 20, textTransform: 'uppercase' }}>
+                  Primary Matched Standard • {matchResult.matchConfidence}% Match
+                </span>
+                {matchResult.primaryMatch.hsnCodes && matchResult.primaryMatch.hsnCodes.length > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#1E40AF', background: '#EFF6FF', border: '1px solid #BFDBFE', padding: '3px 8px', borderRadius: 4 }}>
+                    HSN: {matchResult.primaryMatch.hsnCodes[0]}
+                  </span>
+                )}
+              </div>
+              <h3 style={{ fontSize: 20, fontWeight: 800, color: '#171717', margin: '4px 0' }}>{matchResult.primaryMatch.isNumber}</h3>
               <p style={{ fontSize: 14, fontWeight: 700, color: '#524F4D', margin: 0 }}>{matchResult.primaryMatch.title}</p>
             </div>
 
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ padding: '4px 10px', background: '#EBF4EE', color: '#4F7D5A', fontWeight: 700, fontSize: 12, borderRadius: 4 }}>
                 {matchResult.primaryMatch.mandatoryStatus}
               </span>
               <span style={{ padding: '4px 10px', background: '#FFF1E8', color: '#E9783F', fontWeight: 700, fontSize: 12, borderRadius: 4 }}>
                 {matchResult.primaryMatch.applicableScheme}
               </span>
+            </div>
+          </div>
+
+          {/* Official Gazette QCO Reference & Date Callout */}
+          <div style={{ background: '#F8F6F2', border: '1px solid #E8E2DC', borderRadius: 8, padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#E9783F', textTransform: 'uppercase', marginBottom: 2 }}>
+                📜 Official Gazette Quality Control Order (QCO)
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#171717' }}>
+                {matchResult.primaryMatch.qcoGazetteRef || 'DPIIT / BIS Statutory Enforcement Order'}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 11, color: '#686868' }}>Enforcement Deadline:</div>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: '#4F7D5A' }}>
+                {matchResult.primaryMatch.qcoEnforcementDate || 'Active / Mandatory Enforcement'}
+              </div>
             </div>
           </div>
 
@@ -371,6 +509,9 @@ function MatcherContent() {
 
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 11, color: '#524F4D', marginBottom: 12 }}>
                     <span style={{ background: '#F8F6F2', padding: '2px 6px', borderRadius: 4 }}>📁 {std.category}</span>
+                    {std.hsnCodes && std.hsnCodes.length > 0 && (
+                      <span style={{ background: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>🏷️ HSN {std.hsnCodes[0]}</span>
+                    )}
                     <span style={{ background: '#F8F6F2', padding: '2px 6px', borderRadius: 4 }}>📜 {std.clauseReferences?.length || 0} Clauses</span>
                     <span style={{ background: '#F8F6F2', padding: '2px 6px', borderRadius: 4 }}>🏛️ {std.applicableScheme}</span>
                   </div>
@@ -379,8 +520,11 @@ function MatcherContent() {
                 <div style={{ borderTop: '1px solid #E8E2DC', paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <button
                     onClick={() => {
-                      setProductName(std.title.split('-')[0].trim());
-                      executeMatch(std.title.split('-')[0].trim(), material, usage, businessType);
+                      const prodName = std.title.split('-')[0].trim();
+                      const stdHsn = std.hsnCodes?.[0] || '';
+                      setProductName(prodName);
+                      setHsnCode(stdHsn);
+                      executeMatch(prodName, stdHsn, material, usage, businessType);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
                     style={{
